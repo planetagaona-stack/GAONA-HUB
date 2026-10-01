@@ -2,22 +2,27 @@
 import os from 'node:os';
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { SessionStore } from '../src/sessions.js';
 import { renderHud, demoSnapshot } from '../src/render.js';
 import { launchCodex, resolveCodex } from '../src/launch.js';
 import { watch } from '../src/watch.js';
 import { integratedTerminal } from '../src/terminal.js';
+import { automaticUpdate, checkUpdate, installUpdate } from '../src/update.js';
 
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+const root = fileURLToPath(new URL('../', import.meta.url)).replace(/[\\/]+$/, '');
+const restarted = process.env.GAONA_HUB_UPDATED === '1';
+delete process.env.GAONA_HUB_UPDATED;
 const raw = process.argv.slice(2), separator = raw.indexOf('--');
 const args = separator < 0 ? raw : raw.slice(0, separator);
 const passthrough = separator < 0 ? [] : raw.slice(separator + 1);
-const help = `Gaona-HUB ${version} · HUD debajo del chat\n\n  gaona-hub                   Codex CLI con HUD inferior integrado\n  gaona-hub -- resume <id>     Reanudar chat con el HUD\n  gaona-hub run -- <args>     Codex con HUD (en una terminal)\n  gaona-hub watch             Monitor separado, modo opcional\n  gaona-hub status            Captura con datos reales\n  gaona-hub demo              Diseño con datos de ejemplo\n  gaona-hub sessions          Sesiones recientes\n  gaona-hub doctor            Diagnóstico local\n\n  --ascii --no-color --color --width <40..240> --json\n  --session <id> --project <ruta> --codex-home <ruta>\n  --title <nombre de la tarea>\n  --codex <ejecutable> --plain (ejecutar sin HUD)\n  --native (compatibilidad con un Codex modificado)\n\nTeclado y permisos: los de Codex. Shift+PageUp/PageDown: historial local.\nMétricas locales; el HUD no requiere una clave API.\n`;
+const help = `Gaona-HUB ${version} · HUD debajo del chat\n\n  gaona-hub                   Codex CLI con HUD inferior integrado\n  gaona-hub -- resume <id>     Reanudar chat con el HUD\n  gaona-hub run -- <args>     Codex con HUD (en una terminal)\n  gaona-hub watch             Monitor separado, modo opcional\n  gaona-hub status            Captura con datos reales\n  gaona-hub demo              Diseño con datos de ejemplo\n  gaona-hub sessions          Sesiones recientes\n  gaona-hub doctor            Diagnóstico local\n  gaona-hub update            Actualizar ahora\n  gaona-hub update --check    Comprobar sin instalar\n\n  --ascii --no-color --color --width <40..240> --json\n  --no-update (omitir actualización al iniciar)\n  --session <id> --project <ruta> --codex-home <ruta>\n  --title <nombre de la tarea>\n  --codex <ejecutable> --plain (ejecutar sin HUD)\n  --native (compatibilidad con un Codex modificado)\n\nTeclado y permisos: los de Codex. Shift+PageUp/PageDown: historial local.\nMétricas locales; el HUD no requiere una clave API.\n`;
 if (args.includes('--help') || args.includes('-h')) { console.log(help); process.exit(0); }
 if (args.includes('--version')) { console.log(version); process.exit(0); }
 const command = args[0] && !args[0].startsWith('-') ? args.shift() : 'terminal';
-const flags = new Set(['--ascii', '--no-color', '--color', '--json', '--native', '--footer', '--plain']);
+const flags = new Set(['--ascii', '--no-color', '--color', '--json', '--native', '--footer', '--plain', '--check', '--no-update']);
 const values = new Set(['--width', '--session', '--project', '--codex-home', '--codex', '--title']);
 const parsed = new Map();
 try {
@@ -36,10 +41,24 @@ try {
   if (command === 'terminal' || command === 'run') {
     if (parsed.has('--plain') || parsed.has('--native') || command === 'run' && !process.stdout.isTTY) process.exitCode = await launchCodex(passthrough, { executable: options.executable, cwd: project || process.cwd(), native: parsed.has('--native') });
     else {
+      if (!restarted && !parsed.has('--no-update') && process.stdin.isTTY && process.stdout.isTTY && await automaticUpdate(root, version)) {
+        const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit', shell: false, windowsHide: true, env: { ...process.env, GAONA_HUB_UPDATED: '1' } });
+        const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });
+        process.exit(code);
+      }
       const code = await integratedTerminal(store, { ...options, color: !parsed.has('--no-color') && !process.env.NO_COLOR }, passthrough);
       // Windows ConPTY may keep internal pipe workers alive after child exit.
       await new Promise(resolve => process.stdout.write('', resolve));
       process.exit(code);
+    }
+  }
+  else if (command === 'update') {
+    const release = await checkUpdate(version);
+    if (!release) console.log(`GAONA-HUB ${version}: ya tienes la versión más reciente.`);
+    else if (parsed.has('--check')) console.log(`GAONA-HUB ${version} → ${release.version}: actualización disponible.`);
+    else {
+      if (!root.replaceAll('\\', '/').endsWith('/node_modules/gaona-hub')) throw new Error('Actualiza la instalación global; el checkout de desarrollo no se sobrescribe.');
+      if (await installUpdate(root, release)) console.log(`GAONA-HUB ${release.version} instalado. Abre una nueva sesión para usarlo.`);
     }
   }
   else if (command === 'demo') console.log(renderHud({ ...demoSnapshot, weekly: { usedPercent: 80, resetsAt: Date.now() / 1000 + 211080 } }, { ...options, demo: true }));

@@ -1,8 +1,11 @@
 # GAONA-HUB · byGaona
 
-[Download for Windows](https://github.com/planetagaona-stack/GAONA-HUB/releases/latest) · [MIT license](LICENSE)
+[⬇ Descargar para Windows — última versión](https://github.com/planetagaona-stack/GAONA-HUB/releases/latest/download/GAONA-HUB-windows.zip) · [MIT license](LICENSE)
 
 ![GAONA-HUB terminal preview — demo data](docs/preview.svg)
+
+**Versión principal: 0.5.0.** La descarga de arriba siempre abre el instalador
+de la última versión estable; no necesitas elegir entre releases anteriores.
 
 ## Instalar en tu otro PC
 
@@ -34,7 +37,7 @@ have not been runtime-tested by this release.
 Extract the release ZIP:
 
 ```powershell
-npm.cmd install -g .\gaona-hub-0.4.3.tgz
+npm.cmd install -g .\gaona-hub-0.5.0.tgz
 gaona-hub.cmd
 ```
 
@@ -75,6 +78,22 @@ Use `--ascii --no-color` for a basic display.
 Codex locks conversations open in another interface. Close that session before
 resuming here. The launcher cannot retrofit an already running CLI's screen;
 reopen the conversation ID with the command above.
+
+## Automatic updates
+
+The installed HUD checks GitHub's latest stable release once daily when opening
+an interactive Codex session. New versions are downloaded, verified against
+their release SHA-256 sums, and applied before Codex starts. The launcher then
+restarts itself with the same arguments. Existing sessions keep running; your
+chats, settings, title options, profiles and native dependencies are preserved.
+Offline checks fail back to the installed version. Development checkouts and
+noninteractive commands do not auto-update.
+
+To update immediately, use `gaona-hub.cmd update`; `update --check` only checks.
+Use `--no-update` for one launch, or set `GAONA_HUB_AUTO_UPDATE=0` to disable
+automatic checks. A release that changes native dependencies requires running
+the Windows installer. Auto-updating starts with 0.5.0; older installations need
+one manual upgrade to receive this feature.
 
 ## Integration
 
@@ -145,7 +164,8 @@ The emulator holds the Codex screen in memory to display chat, without saving
 or uploading that screen. The metric reader retains structured metadata without
 retaining message bodies or tool arguments. It reads `$CODEX_HOME/sessions`
 (default `~/.codex/sessions`), the bound chat name from `session_index.jsonl`,
-and local Git metadata. No HUD server, telemetry,
+and local Git metadata. The updater contacts GitHub for public release metadata
+and packages; it does not upload chats, paths or credentials. No HUD server, telemetry,
 network listener or API-key reader is used. Codex keeps its normal connection.
 JSON snapshots contain local paths, session IDs and saved chat names; review before sharing.
 

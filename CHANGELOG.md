@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+- Automatic stable-release checks once daily when starting the installed HUD.
+- Downloads are verified against release SHA-256 sums before applying updates.
+- Updates preserve native dependencies and user settings, and restart the HUD
+  before opening Codex. Existing chats remain open on their current version.
+- Added `update`, `update --check`, `--no-update` and an environment opt-out.
+- The README download button points directly to the latest Windows installer.
+
 ## 0.4.3
 
 - Window titles prefer the saved Codex chat name and follow renames.
