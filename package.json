@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "start": "node bin/codex-hub.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/hub.test.js test/terminal.test.js",
     "pack:check": "npm pack --dry-run",
     "release": "node scripts/release.js"
   },
