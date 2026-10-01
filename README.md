@@ -34,7 +34,7 @@ have not been runtime-tested by this release.
 Extract the release ZIP:
 
 ```powershell
-npm.cmd install -g .\gaona-hub-0.4.1.tgz
+npm.cmd install -g .\gaona-hub-0.4.2.tgz
 gaona-hub.cmd
 ```
 

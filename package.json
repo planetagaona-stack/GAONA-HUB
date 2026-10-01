@@ -1,6 +1,6 @@
 {
   "name": "gaona-hub",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "GAONA-HUB byGaona: a neon HUD fixed below your official Codex CLI chat.",
   "author": "byGaona",
   "repository": { "type": "git", "url": "git+https://github.com/planetagaona-stack/GAONA-HUB.git" },

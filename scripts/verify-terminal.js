@@ -29,6 +29,8 @@ async function until(predicate, label, timeout = 30000) {
 try {
   await until(() => hudRow() >= 0 && lines().some(line => line.includes('OpenAI Codex')), 'chat + HUD');
   if (id) await until(() => lines().slice(hudRow() + 1).some(line => /gpt[-\s]/i.test(line)), 'bound model metadata');
+  assert.ok(titles.length > 0, 'project title is emitted');
+  assert.ok(titles.every(title => !title.includes('GAONA-HUB') && !title.includes('byGaona')), 'branding stays in the HUD, outside the window title');
   let heading = hudRow();
   assert.ok(heading > 8 && heading < 24);
   child.write('HUB_KEYBOARD_CHECK');

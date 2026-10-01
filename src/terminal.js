@@ -1,6 +1,7 @@
 import pty from 'node-pty';
 import xterm from '@xterm/headless';
 import os from 'node:os';
+import path from 'node:path';
 import { CommandTracker } from './command-tracker.js';
 import { resolveCodex } from './launch.js';
 import { layoutScreen, drawFrame, titleSignals } from './terminal-view.js';
@@ -8,12 +9,25 @@ import { toSnapshot } from './signals.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
 // viewport. The outer terminal owns the fixed footer and forwards input.
+export function projectWindowTitle(state, cwd) {
+  const directory = state.cwd || cwd;
+  return (state.project || path.win32.basename(directory.replace(/[\\/]+$/, '')) || directory || 'Codex').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+}
+
 export async function integratedTerminal(store, options, args) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('El chat integrado requiere una terminal interactiva. Usa run --plain para comandos sin terminal.');
   const cwd = options.project || process.cwd();
-  let state = toSnapshot({}), selected = null, announced = null, layout, frame = [], stopped = false;
+  let state = toSnapshot({ cwd }), selected = null, announced = null, layout, frame = [], stopped = false;
   let painting = null, refreshing = false, timer, child, active = false;
   let runtimeSignals = {};
+  let windowTitle = null;
+  const updateTitle = () => {
+    const label = projectWindowTitle(state, cwd);
+    if (label !== windowTitle) {
+      windowTitle = label;
+      process.stdout.write(`\x1b]0;${label}\x07`);
+    }
+  };
   const commands = new CommandTracker();
   const dimensions = () => ({ cols: Math.max(20, process.stdout.columns || 120), rows: Math.max(10, process.stdout.rows || 30) });
   const size = dimensions();
@@ -65,6 +79,7 @@ export async function integratedTerminal(store, options, args) {
         frame = [];
       }
       layout = next;
+      updateTitle();
       schedule();
     } finally { refreshing = false; }
   };
@@ -102,6 +117,7 @@ export async function integratedTerminal(store, options, args) {
     child = pty.spawn(resolveCodex(options.executable), ['-c', 'tui.terminal_title=["session-id","model","reasoning","status","fast-mode"]', '-c', 'tui.status_line=[]', ...args], { name: 'xterm-256color', cols: size.cols, rows: layout.chatRows, cwd, env, useConpty: true });
     process.stdout.write('\x1b[?1049h\x1b[2J');
     active = true;
+    updateTitle();
     process.stdin.setRawMode(true); process.stdin.resume();
     process.stdin.on('data', input); process.stdout.on('resize', resize);
     terminal.onData(data => child.write(data)); // DSR and device attribute replies.
@@ -116,8 +132,7 @@ export async function integratedTerminal(store, options, args) {
         void refresh();
       }
       if (parsed) { state = { ...state, ...runtimeSignals }; void refresh(); }
-      const label = id ? `GAONA-HUB byGaona | ${state.project || 'Codex'}` : title;
-      process.stdout.write(`\x1b]0;${label.replace(/[\x00-\x1f\x7f]/g, '')}\x07`);
+      updateTitle();
     });
     child.onData(data => terminal.write(data, schedule));
     timer = setInterval(() => void refresh(), 1000);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import os from 'node:os';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { SessionStore } from '../src/sessions.js';
 import { renderHud, demoSnapshot } from '../src/render.js';
@@ -9,12 +9,13 @@ import { launchCodex, resolveCodex } from '../src/launch.js';
 import { watch } from '../src/watch.js';
 import { integratedTerminal } from '../src/terminal.js';
 
+const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const raw = process.argv.slice(2), separator = raw.indexOf('--');
 const args = separator < 0 ? raw : raw.slice(0, separator);
 const passthrough = separator < 0 ? [] : raw.slice(separator + 1);
-const help = `Gaona-HUB 0.4.1 · HUD debajo del chat\n\n  gaona-hub                   Codex CLI con HUD inferior integrado\n  gaona-hub -- resume <id>     Reanudar chat con el HUD\n  gaona-hub run -- <args>     Codex con HUD (en una terminal)\n  gaona-hub watch             Monitor separado, modo opcional\n  gaona-hub status            Captura con datos reales\n  gaona-hub demo              Diseño con datos de ejemplo\n  gaona-hub sessions          Sesiones recientes\n  gaona-hub doctor            Diagnóstico local\n\n  --ascii --no-color --color --width <40..240> --json\n  --session <id> --project <ruta> --codex-home <ruta>\n  --codex <ejecutable> --plain (ejecutar sin HUD)\n  --native (compatibilidad con un Codex modificado)\n\nTeclado y permisos: los de Codex. Shift+PageUp/PageDown: historial local.\nMétricas locales; el HUD no requiere una clave API.\n`;
+const help = `Gaona-HUB ${version} · HUD debajo del chat\n\n  gaona-hub                   Codex CLI con HUD inferior integrado\n  gaona-hub -- resume <id>     Reanudar chat con el HUD\n  gaona-hub run -- <args>     Codex con HUD (en una terminal)\n  gaona-hub watch             Monitor separado, modo opcional\n  gaona-hub status            Captura con datos reales\n  gaona-hub demo              Diseño con datos de ejemplo\n  gaona-hub sessions          Sesiones recientes\n  gaona-hub doctor            Diagnóstico local\n\n  --ascii --no-color --color --width <40..240> --json\n  --session <id> --project <ruta> --codex-home <ruta>\n  --codex <ejecutable> --plain (ejecutar sin HUD)\n  --native (compatibilidad con un Codex modificado)\n\nTeclado y permisos: los de Codex. Shift+PageUp/PageDown: historial local.\nMétricas locales; el HUD no requiere una clave API.\n`;
 if (args.includes('--help') || args.includes('-h')) { console.log(help); process.exit(0); }
-if (args.includes('--version')) { console.log('0.4.1'); process.exit(0); }
+if (args.includes('--version')) { console.log(version); process.exit(0); }
 const command = args[0] && !args[0].startsWith('-') ? args.shift() : 'terminal';
 const flags = new Set(['--ascii', '--no-color', '--color', '--json', '--native', '--footer', '--plain']);
 const values = new Set(['--width', '--session', '--project', '--codex-home', '--codex']);
@@ -51,7 +52,7 @@ try {
     const state = await snapshot();
     let codexVersion = 'no encontrado';
     try { codexVersion = execFileSync(resolveCodex(options.executable), ['--version'], { encoding: 'utf8', timeout: 5000, windowsHide: true }).trim(); } catch { /* Optional launcher dependency. */ }
-    console.log(`Gaona-HUB 0.4.1\nNode: ${process.version}\nCodex CLI: ${codexVersion}\nCodex home: ${home}\nCarpeta de sesiones: ${existsSync(path.join(home, 'sessions')) ? 'encontrada' : 'todavía no existe'}\nSesiones recientes: ${state.sessions.length}\nHUD inferior integrado: disponible\nPrivacidad: métricas locales; no envía mensajes ni metadatos\nModo normal: Codex oficial arriba, HUD fijo debajo; identificación por sesión.`);
+    console.log(`Gaona-HUB ${version}\nNode: ${process.version}\nCodex CLI: ${codexVersion}\nCodex home: ${home}\nCarpeta de sesiones: ${existsSync(path.join(home, 'sessions')) ? 'encontrada' : 'todavía no existe'}\nSesiones recientes: ${state.sessions.length}\nHUD inferior integrado: disponible\nPrivacidad: métricas locales; no envía mensajes ni metadatos\nModo normal: Codex oficial arriba, HUD fijo debajo; identificación por sesión.`);
   } else if (command === 'watch') await watch(store, options);
   else throw new Error(`Comando desconocido: ${command}\n${help}`);
 } catch (error) { console.error(`Gaona-HUB: ${error.message}`); process.exitCode = 1; }

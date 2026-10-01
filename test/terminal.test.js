@@ -6,6 +6,15 @@ import { demoSnapshot, visibleLength } from '../src/render.js';
 import { renderHud } from '../src/render.js';
 import { CommandTracker } from '../src/command-tracker.js';
 import { parseSignals, toSnapshot } from '../src/signals.js';
+import { projectWindowTitle } from '../src/terminal.js';
+
+test('window titles identify the actual project at startup and after session binding', () => {
+  assert.equal(projectWindowTitle({}, 'C:\\Projects\\Tienda'), 'Tienda');
+  assert.equal(projectWindowTitle({ cwd: 'C:\\Projects\\Otro' }, 'C:\\Projects\\Tienda'), 'Otro');
+  assert.equal(projectWindowTitle({ project: 'Mi Proyecto' }, '/work/fallback'), 'Mi Proyecto');
+  assert.equal(projectWindowTitle({}, '/work/website/'), 'website');
+  assert.equal(projectWindowTitle({ project: 'bad\x1b\x07\u009cname' }, '/work'), 'badname');
+});
 
 test('CTX has a proportionate bar immediately beside the weekly bar', () => {
   const rendered = renderHud(demoSnapshot, { width: 180, footer: true, color: false });

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Window and tab titles now identify the current project instead of HUD branding.
+- Titles update when a resumed session resolves to a different project.
+- Windows test command works with both Node.js 20 and 24.
+
 ## 0.4.1
 
 - GAONA-HUB branding and visible byGaona signature.
