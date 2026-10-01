@@ -38,6 +38,21 @@ test('shortened native IDs resolve uniquely and reject colliding or mismatched m
   assert.equal(await store.resolveSession(id), null);
 });
 
+test('chat titles use only the bound session index entry and follow appended renames', async t => {
+  const { home } = await fixture(t);
+  const index = path.join(home, 'session_index.jsonl');
+  const store = new SessionStore(home);
+  assert.equal((await store.snapshot('session-1')).threadName, null);
+  await writeFile(index, JSON.stringify({ id: 'other-session', thread_name: 'Otra tarea' }) + '\n' + JSON.stringify({ id: 'session-1', thread_name: 'Mi tarea', message: 'PRIVATE_BODY' }) + '\ninvalid\n');
+  assert.equal((await store.snapshot('session-1')).threadName, 'Mi tarea');
+  assert.ok(!JSON.stringify(store.titleCache).includes('PRIVATE_BODY'));
+  assert.ok(!JSON.stringify(store.titleCache).includes('Otra tarea'));
+  await appendFile(index, JSON.stringify({ id: 'session-1', thread_name: 'Renombrada' }) + '\n');
+  assert.equal((await store.snapshot('session-1')).threadName, 'Renombrada');
+  await appendFile(index, JSON.stringify({ id: 'session-1', thread_name: '' }) + '\n');
+  assert.equal((await store.snapshot('session-1')).threadName, null);
+});
+
 test('explicitly bound older session is found beyond the thirty recent files', async t => {
   const { home } = await fixture(t);
   const id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';

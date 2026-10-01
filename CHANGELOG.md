@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3
+
+- Window titles prefer the saved Codex chat name and follow renames.
+- Optional `--title` sets a task name explicitly.
+- Opening in the user home folder shows "Nueva tarea" instead of the username.
+
 ## 0.4.2
 
 - Window and tab titles now identify the current project instead of HUD branding.

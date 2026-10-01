@@ -9,9 +9,13 @@ import { toSnapshot } from './signals.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
 // viewport. The outer terminal owns the fixed footer and forwards input.
-export function projectWindowTitle(state, cwd) {
+export function projectWindowTitle(state, cwd, { title, home = os.homedir() } = {}) {
+  const clean = value => typeof value === 'string' ? Array.from(value.replace(/[\x00-\x1f\x7f-\x9f]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 90).join('') : '';
+  const named = clean(title) || clean(state.threadName);
+  if (named) return named;
   const directory = state.cwd || cwd;
-  return (state.project || path.win32.basename(directory.replace(/[\\/]+$/, '')) || directory || 'Codex').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+  if (path.resolve(directory) === path.resolve(home)) return 'Nueva tarea';
+  return clean(state.project || path.win32.basename(directory.replace(/[\\/]+$/, '')) || directory) || 'Codex';
 }
 
 export async function integratedTerminal(store, options, args) {
@@ -22,7 +26,7 @@ export async function integratedTerminal(store, options, args) {
   let runtimeSignals = {};
   let windowTitle = null;
   const updateTitle = () => {
-    const label = projectWindowTitle(state, cwd);
+    const label = projectWindowTitle(state, cwd, options);
     if (label !== windowTitle) {
       windowTitle = label;
       process.stdout.write(`\x1b]0;${label}\x07`);

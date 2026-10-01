@@ -16,6 +16,16 @@ test('window titles identify the actual project at startup and after session bin
   assert.equal(projectWindowTitle({ project: 'bad\x1b\x07\u009cname' }, '/work'), 'badname');
 });
 
+test('window titles prefer the task name, follow renames, and hide the home username', () => {
+  const home = 'C:\\Users\\ExampleUser';
+  assert.equal(projectWindowTitle({}, home, { home }), 'Nueva tarea');
+  assert.equal(projectWindowTitle({ threadName: 'Actualizar drivers' }, home, { home }), 'Actualizar drivers');
+  assert.equal(projectWindowTitle({ threadName: 'Chat renombrado' }, home, { title: 'Mi tarea', home }), 'Mi tarea');
+  assert.equal(projectWindowTitle({ threadName: '  Chat\x1b\x07\u009c   seguro  ' }, home, { home }), 'Chat seguro');
+  assert.equal(projectWindowTitle({ threadName: '   ' }, home, { home }), 'Nueva tarea');
+  assert.equal(Array.from(projectWindowTitle({ threadName: '🙂'.repeat(120) }, home)).length, 90);
+});
+
 test('CTX has a proportionate bar immediately beside the weekly bar', () => {
   const rendered = renderHud(demoSnapshot, { width: 180, footer: true, color: false });
   const rows = rendered.split('\n');

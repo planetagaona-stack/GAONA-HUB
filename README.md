@@ -34,7 +34,7 @@ have not been runtime-tested by this release.
 Extract the release ZIP:
 
 ```powershell
-npm.cmd install -g .\gaona-hub-0.4.2.tgz
+npm.cmd install -g .\gaona-hub-0.4.3.tgz
 gaona-hub.cmd
 ```
 
@@ -77,6 +77,18 @@ resuming here. The launcher cannot retrofit an already running CLI's screen;
 reopen the conversation ID with the command above.
 
 ## Integration
+
+Window and tab titles use the saved Codex chat name from the local session index
+and follow renames. Without a saved name they show the project directory; the
+user home directory shows **Nueva tarea** instead of your username.
+You can choose a task name explicitly:
+
+```powershell
+gaona-hub.cmd --title "Actualizar drivers"
+```
+
+`--title` changes only the displayed window title, not the saved Codex chat name.
+The HUD does not generate a name by reading your prompts.
 
 Codex runs in a real pseudoterminal above the reserved HUD. An xterm VT emulator
 confines clears, scrolling and alternate screens to that viewport. Keyboard,
@@ -132,9 +144,10 @@ recent files. Native status takes precedence over a stale recorded task status.
 The emulator holds the Codex screen in memory to display chat, without saving
 or uploading that screen. The metric reader retains structured metadata without
 retaining message bodies or tool arguments. It reads `$CODEX_HOME/sessions`
-(default `~/.codex/sessions`) and local Git metadata. No HUD server, telemetry,
+(default `~/.codex/sessions`), the bound chat name from `session_index.jsonl`,
+and local Git metadata. No HUD server, telemetry,
 network listener or API-key reader is used. Codex keeps its normal connection.
-JSON snapshots contain local paths and session IDs; review before sharing.
+JSON snapshots contain local paths, session IDs and saved chat names; review before sharing.
 
 ## Develop and share
 

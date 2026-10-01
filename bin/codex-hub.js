@@ -13,12 +13,12 @@ const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.u
 const raw = process.argv.slice(2), separator = raw.indexOf('--');
 const args = separator < 0 ? raw : raw.slice(0, separator);
 const passthrough = separator < 0 ? [] : raw.slice(separator + 1);
-const help = `Gaona-HUB ${version} · HUD debajo del chat\n\n  gaona-hub                   Codex CLI con HUD inferior integrado\n  gaona-hub -- resume <id>     Reanudar chat con el HUD\n  gaona-hub run -- <args>     Codex con HUD (en una terminal)\n  gaona-hub watch             Monitor separado, modo opcional\n  gaona-hub status            Captura con datos reales\n  gaona-hub demo              Diseño con datos de ejemplo\n  gaona-hub sessions          Sesiones recientes\n  gaona-hub doctor            Diagnóstico local\n\n  --ascii --no-color --color --width <40..240> --json\n  --session <id> --project <ruta> --codex-home <ruta>\n  --codex <ejecutable> --plain (ejecutar sin HUD)\n  --native (compatibilidad con un Codex modificado)\n\nTeclado y permisos: los de Codex. Shift+PageUp/PageDown: historial local.\nMétricas locales; el HUD no requiere una clave API.\n`;
+const help = `Gaona-HUB ${version} · HUD debajo del chat\n\n  gaona-hub                   Codex CLI con HUD inferior integrado\n  gaona-hub -- resume <id>     Reanudar chat con el HUD\n  gaona-hub run -- <args>     Codex con HUD (en una terminal)\n  gaona-hub watch             Monitor separado, modo opcional\n  gaona-hub status            Captura con datos reales\n  gaona-hub demo              Diseño con datos de ejemplo\n  gaona-hub sessions          Sesiones recientes\n  gaona-hub doctor            Diagnóstico local\n\n  --ascii --no-color --color --width <40..240> --json\n  --session <id> --project <ruta> --codex-home <ruta>\n  --title <nombre de la tarea>\n  --codex <ejecutable> --plain (ejecutar sin HUD)\n  --native (compatibilidad con un Codex modificado)\n\nTeclado y permisos: los de Codex. Shift+PageUp/PageDown: historial local.\nMétricas locales; el HUD no requiere una clave API.\n`;
 if (args.includes('--help') || args.includes('-h')) { console.log(help); process.exit(0); }
 if (args.includes('--version')) { console.log(version); process.exit(0); }
 const command = args[0] && !args[0].startsWith('-') ? args.shift() : 'terminal';
 const flags = new Set(['--ascii', '--no-color', '--color', '--json', '--native', '--footer', '--plain']);
-const values = new Set(['--width', '--session', '--project', '--codex-home', '--codex']);
+const values = new Set(['--width', '--session', '--project', '--codex-home', '--codex', '--title']);
 const parsed = new Map();
 try {
   for (let i = 0; i < args.length; i++) {
@@ -31,7 +31,7 @@ try {
   const home = path.resolve(parsed.get('--codex-home') || process.env.CODEX_HOME || path.join(os.homedir(), '.codex'));
   const project = parsed.get('--project') ? path.resolve(parsed.get('--project')) : null;
   const store = new SessionStore(home);
-  const options = { width, fixedWidth: parsed.has('--width'), ascii: parsed.has('--ascii'), color: !parsed.has('--no-color') && (parsed.has('--color') || Boolean(process.stdout.isTTY) && !process.env.NO_COLOR), footer: parsed.has('--footer'), session: parsed.get('--session') || null, project, executable: parsed.get('--codex') };
+  const options = { width, fixedWidth: parsed.has('--width'), ascii: parsed.has('--ascii'), color: !parsed.has('--no-color') && (parsed.has('--color') || Boolean(process.stdout.isTTY) && !process.env.NO_COLOR), footer: parsed.has('--footer'), session: parsed.get('--session') || null, project, title: parsed.get('--title'), executable: parsed.get('--codex') };
   const snapshot = () => store.snapshot(options.session, project);
   if (command === 'terminal' || command === 'run') {
     if (parsed.has('--plain') || parsed.has('--native') || command === 'run' && !process.stdout.isTTY) process.exitCode = await launchCodex(passthrough, { executable: options.executable, cwd: project || process.cwd(), native: parsed.has('--native') });

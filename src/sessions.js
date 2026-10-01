@@ -1,4 +1,4 @@
-import { open, readdir, stat } from 'node:fs/promises';
+import { open, readdir, stat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -16,6 +16,8 @@ export class SessionStore {
     this.refreshed = 0;
     this.cache = new Map();
     this.gitCache = new Map();
+    this.indexFile = path.join(home, 'session_index.jsonl');
+    this.titleCache = null;
   }
 
   async list() {
@@ -107,6 +109,25 @@ export class SessionStore {
     return value;
   }
 
+  async threadName(id) {
+    if (!id) return null;
+    try {
+      const info = await stat(this.indexFile);
+      if (info.size > 8 * 1024 * 1024) return null;
+      const old = this.titleCache;
+      if (old?.id === id && old.size === info.size && old.modified === info.mtimeMs) return old.name;
+      let name = null;
+      for (const line of (await readFile(this.indexFile, 'utf8')).split(/\r?\n/)) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry?.id === id && typeof entry.thread_name === 'string') name = entry.thread_name.trim() || null;
+        } catch { /* Ignore incomplete or malformed index entries. */ }
+      }
+      this.titleCache = { id, size: info.size, modified: info.mtimeMs, name };
+      return name;
+    } catch { this.titleCache = null; return null; }
+  }
+
   async snapshot(id, project) {
     const files = [...await this.list()];
     if (id) {
@@ -125,6 +146,6 @@ export class SessionStore {
     }
     if (id && !selected) return { error: 'Sesión no disponible', sessions };
     selected ??= toSnapshot({});
-    return { ...selected, git: await this.git(selected.cwd), sessions, connected: Boolean(selected.id) };
+    return { ...selected, threadName: await this.threadName(selected.id), git: await this.git(selected.cwd), sessions, connected: Boolean(selected.id) };
   }
 }
