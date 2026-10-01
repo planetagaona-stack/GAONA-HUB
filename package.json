@@ -1,0 +1,45 @@
+{
+  "name": "gaona-hub",
+  "version": "0.4.1",
+  "description": "GAONA-HUB byGaona: a neon HUD fixed below your official Codex CLI chat.",
+  "author": "byGaona",
+  "repository": { "type": "git", "url": "git+https://github.com/planetagaona-stack/GAONA-HUB.git" },
+  "homepage": "https://github.com/planetagaona-stack/GAONA-HUB#readme",
+  "bugs": { "url": "https://github.com/planetagaona-stack/GAONA-HUB/issues" },
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "gaona-hub": "bin/codex-hub.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "scripts",
+    "assets",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "THIRD-PARTY-NOTICES.txt"
+  ],
+  "scripts": {
+    "start": "node bin/codex-hub.js",
+    "test": "node --test test/*.test.js",
+    "pack:check": "npm pack --dry-run",
+    "release": "node scripts/release.js"
+  },
+  "keywords": [
+    "codex",
+    "hud",
+    "dashboard",
+    "local",
+    "windows"
+  ],
+  "dependencies": {
+    "@xterm/headless": "6.0.0",
+    "node-pty": "1.1.0"
+  }
+}

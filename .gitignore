@@ -1,0 +1,7 @@
+node_modules/
+*.tgz
+dist/
+*.log
+.verify-install/
+GOAL.md
+PLAN.md
