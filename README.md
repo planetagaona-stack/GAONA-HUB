@@ -4,16 +4,16 @@
 
 ![GAONA-HUB terminal preview — demo data](docs/preview.svg)
 
-**Versión principal: 0.6.0.** La descarga de arriba siempre abre el instalador
+**Versión principal: 0.6.1.** La descarga de arriba siempre abre el instalador
 de la última versión estable; no necesitas elegir entre releases anteriores.
 
-## Novedades de la versión 0.6.0
+## Novedades de la versión 0.6.1
 
-El HUD reemplaza el relleno `////` por una regla fina. Cuando Codex muestra el
-estado TUI `Compacting context` con el detalle `Making room to continue.`, el pie
-indica **COMPACTANDO** y anima segmentos que convergen al centro. El porcentaje
-CTX no se usa como señal. `--ascii` conserva caracteres ASCII y `--no-color`
-mantiene el estado sin animación.
+La barra indica la posición del historial sin capturar el mouse: Ctrl+clic,
+selección y rueda siguen bajo el control de Windows Terminal. Usa
+`Shift+PageUp` / `Shift+PageDown` para desplazarte. El HUD también actualiza
+MODEL al elegir un modelo anterior y mantiene el encabezado minimalista. La
+animación de compactación conserva sus variantes `--ascii` y `--no-color`.
 
 ## Instalar en tu otro PC
 
@@ -45,7 +45,7 @@ have not been runtime-tested by this release.
 Extract the release ZIP:
 
 ```powershell
-npm.cmd install -g .\gaona-hub-0.6.0.tgz
+npm.cmd install -g .\gaona-hub-0.6.1.tgz
 gaona-hub.cmd
 ```
 
@@ -79,13 +79,11 @@ gaona-hub doctor                   Diagnostics
 
 El resto de los argumentos después de `--` se reenvía literalmente a Codex,
 incluidas las opciones de permisos. Los atajos, aprobaciones y autenticación
-siguen a cargo de Codex. La rueda del mouse y **Shift+PageUp/PageDown** recorren
-la conversación sin activar el historial del editor. En pantalla alternativa,
-GAONA-HUB conserva los eventos de mouse que Codex solicita; si Codex no captura
-el mouse, la rueda se traduce a PageUp/PageDown. En el buffer normal desplaza el
-historial local. Para seleccionar texto, mantén Shift y arrastra. Al cambiar el
-tamaño, el HUD se mantiene abajo. Las ventanas pequeñas muestran menos métricas
-para dejar espacio al chat. Usa `--ascii --no-color` para una vista básica.
+siguen a cargo de Codex. La barra del historial es visual: el HUB no activa
+mouse tracking, así Windows Terminal conserva Ctrl+clic, selección y rueda. Usa
+**Shift+PageUp/PageDown** para desplazarte por el chat. Al cambiar el tamaño, el
+HUD se mantiene abajo. Las ventanas pequeñas muestran menos métricas para dejar
+espacio al chat. Usa `--ascii --no-color` para una vista básica.
 
 Codex locks conversations open in another interface. Close that session before
 resuming here. The launcher cannot retrofit an already running CLI's screen;
