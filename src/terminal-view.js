@@ -25,8 +25,8 @@ export function layoutScreen(columns, rows, state = {}, options = {}) {
   const width = Math.max(20, Math.min(240, columns));
   const indicators = [state.fastMode == null ? null : `FAST ${state.fastMode ? 'ON' : 'OFF'}`, state.lastCommand ? `CMD ${safeText(state.lastCommand)}` : null, state.skill ? `SKILL ${safeText(state.skill)}` : null].filter(Boolean);
   const title = clip(`>_ GAONA-HUB byGaona  ·  ${indicators.length ? indicators.join(' · ') : 'sesión actual'}`, width - 1, options.ascii);
-  const rail = '/'.repeat(Math.max(0, width - 1 - visibleLength(title) - 1));
-  const heading = options.color === false ? title + (rail ? ' ' + rail : '') : `\x1b[1;38;2;73;208;255m${title}\x1b[0m${rail ? ` \x1b[38;2;44;76;96m${rail}\x1b[0m` : ''}`;
+  const rule = (options.ascii ? '-' : '─').repeat(Math.max(0, width - 1 - visibleLength(title) - 1));
+  const heading = options.color === false ? title + (rule ? ' ' + rule : '') : `\x1b[1;38;2;73;208;255m${title}\x1b[0m${rule ? ` \x1b[38;2;44;76;96m${rule}\x1b[0m` : ''}`;
   const metrics = columns < 40 ? [] : renderHud(state, { ...options, width, footer: true }).split('\n');
   const available = Math.max(0, rows - 8);
   const footer = [heading, ...metrics].slice(0, available);
@@ -79,6 +79,19 @@ export function footerSession(terminal) {
     if (match) return match[1];
   }
   return null;
+}
+
+export function isCompacting(terminal) {
+  const buffer = terminal.buffer.active;
+  const end = Math.min(buffer.length, buffer.baseY + terminal.rows);
+  const start = Math.max(0, end - 8);
+  for (let row = start; row + 1 < end; row++) {
+    const header = buffer.getLine(row)?.translateToString(true).trim() || '';
+    const detail = buffer.getLine(row + 1)?.translateToString(true).trim() || '';
+    if (/^(?:•|∙|\*)\s*Compacting context(?:\s|$)/u.test(header)
+      && /^└\s*Making room to continue\./u.test(detail)) return true;
+  }
+  return false;
 }
 
 export function drawFrame(terminal, layout, previous = []) {

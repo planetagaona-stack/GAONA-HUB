@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import xterm from '@xterm/headless';
 import { layoutScreen, bufferRows, drawFrame, footerSession, sessionFromTitle, titleSignals } from '../src/terminal-view.js';
+import * as terminalView from '../src/terminal-view.js';
 import { demoSnapshot, visibleLength } from '../src/render.js';
 import { renderHud } from '../src/render.js';
 import { CommandTracker } from '../src/command-tracker.js';
@@ -78,6 +79,23 @@ test('footer reserves bottom rows while keeping at least eight rows for Codex', 
     assert.ok(layout.chatRows >= 8);
     assert.ok(layout.footer.every(line => visibleLength(line) <= columns));
   }
+});
+
+test('Codex compaction is detected only while its live two-line status is visible', async t => {
+  const terminal = emulator(t, 80, 16);
+  await write(terminal, '› user mentions Compacting context\r\ntext only\r\n');
+  assert.equal(typeof terminalView.isCompacting, 'function');
+  assert.equal(terminalView.isCompacting(terminal), false);
+  await write(terminal, '\x1b[2J\x1b[10;1H• Compacting context (0:02 • esc to interrupt)\r\n└ Making room to continue.\r\n');
+  assert.equal(terminalView.isCompacting(terminal), true);
+  await write(terminal, '\x1b[2J\x1b[H› Ask Codex to do anything\r\nContext compacted\r\n');
+  assert.equal(terminalView.isCompacting(terminal), false);
+});
+
+test('HUD heading replaces the decorative slash rail with a thin rule', () => {
+  const layout = layoutScreen(120, 24, demoSnapshot, { color: false });
+  assert.ok(!layout.footer.join('\n').includes('////'));
+  assert.ok(layout.footer[0].includes('─'));
 });
 
 test('Codex clear-screen and alternate-buffer output cannot overwrite the reserved HUD', async t => {

@@ -4,8 +4,16 @@
 
 ![GAONA-HUB terminal preview — demo data](docs/preview.svg)
 
-**Versión principal: 0.5.0.** La descarga de arriba siempre abre el instalador
+**Versión principal: 0.6.0.** La descarga de arriba siempre abre el instalador
 de la última versión estable; no necesitas elegir entre releases anteriores.
+
+## Novedades de la versión 0.6.0
+
+El HUD reemplaza el relleno `////` por una regla fina. Cuando Codex muestra el
+estado TUI `Compacting context` con el detalle `Making room to continue.`, el pie
+indica **COMPACTANDO** y anima segmentos que convergen al centro. El porcentaje
+CTX no se usa como señal. `--ascii` conserva caracteres ASCII y `--no-color`
+mantiene el estado sin animación.
 
 ## Instalar en tu otro PC
 
@@ -37,7 +45,7 @@ have not been runtime-tested by this release.
 Extract the release ZIP:
 
 ```powershell
-npm.cmd install -g .\gaona-hub-0.5.0.tgz
+npm.cmd install -g .\gaona-hub-0.6.0.tgz
 gaona-hub.cmd
 ```
 

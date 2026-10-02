@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- La rueda del mouse recorre el chat en vez de cambiar el texto del editor.
+- El HUD reemplaza los rellenos diagonales por reglas horizontales finas.
+- La señal viva de compactación de Codex activa un pulso que converge al centro;
+  `--ascii` conserva la salida ASCII y `--no-color` mantiene el estado fijo.
+
 ## 0.5.0
 
 - Automatic stable-release checks once daily when starting the installed HUD.

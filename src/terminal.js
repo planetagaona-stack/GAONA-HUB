@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CommandTracker } from './command-tracker.js';
 import { resolveCodex } from './launch.js';
-import { layoutScreen, drawFrame, titleSignals } from './terminal-view.js';
+import { layoutScreen, drawFrame, titleSignals, isCompacting } from './terminal-view.js';
 import { toSnapshot } from './signals.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
@@ -111,7 +111,7 @@ export async function integratedTerminal(store, options, args) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('El chat integrado requiere una terminal interactiva. Usa run --plain para comandos sin terminal.');
   const cwd = options.project || process.cwd();
   let state = toSnapshot({ cwd }), selected = null, announced = null, layout, frame = [], stopped = false;
-  let painting = null, refreshing = false, timer, inputFlushTimer, child, active = false;
+  let painting = null, refreshing = false, timer, compactionTimer, inputFlushTimer, child, active = false;
   const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
   let windowTitle = null;
@@ -152,6 +152,28 @@ export async function integratedTerminal(store, options, args) {
     process.stdout.write(output + result.text);
   };
   const schedule = () => { if (!painting && !stopped) painting = setTimeout(paint, 25); };
+  const syncCompaction = () => {
+    const compacting = isCompacting(terminal);
+    if (compacting === Boolean(runtimeSignals.compacting)) return;
+    clearInterval(compactionTimer);
+    if (compacting) {
+      runtimeSignals.compacting = true;
+      runtimeSignals.compactionFrame = 0;
+      if (options.color !== false) {
+        compactionTimer = setInterval(() => {
+          if (!isCompacting(terminal)) { syncCompaction(); return; }
+          runtimeSignals.compactionFrame = (runtimeSignals.compactionFrame + 1) % 6;
+          state = { ...state, ...runtimeSignals };
+          schedule();
+        }, 180);
+      }
+    } else {
+      delete runtimeSignals.compacting;
+      delete runtimeSignals.compactionFrame;
+    }
+    state = { ...state, ...runtimeSignals };
+    schedule();
+  };
   const refresh = async () => {
     if (refreshing || stopped) return;
     refreshing = true;
@@ -238,7 +260,7 @@ export async function integratedTerminal(store, options, args) {
   const cleanup = () => {
     if (stopped) return;
     stopped = true;
-    clearInterval(timer); clearTimeout(painting); clearTimeout(inputFlushTimer);
+    clearInterval(timer); clearInterval(compactionTimer); clearTimeout(painting); clearTimeout(inputFlushTimer);
     process.stdin.off('data', input); process.stdout.off('resize', resize);
     if (active) {
       process.stdin.setRawMode(oldRaw); process.stdin.pause();
@@ -269,7 +291,7 @@ export async function integratedTerminal(store, options, args) {
       if (parsed) { state = { ...state, ...runtimeSignals }; void refresh(); }
       updateTitle();
     });
-    child.onData(data => terminal.write(data, schedule));
+    child.onData(data => terminal.write(data, () => { syncCompaction(); schedule(); }));
     timer = setInterval(() => void refresh(), 1000);
     paint();
     return await new Promise(resolve => child.onExit(event => { cleanup(); resolve(event.exitCode); }));
