@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 const cli = process.argv[2] || fileURLToPath(new URL('../bin/codex-hub.js', import.meta.url));
 const id = process.argv[3];
-const args = [cli, '--project', process.argv[4] || os.homedir(), '--', '--no-alt-screen', '--no-daemon', '-c', 'tui.resume_cwd="session"', ...(id ? ['fork', id] : [])];
+const args = [cli, '--integrated', '--no-update', '--project', process.argv[4] || os.homedir(), '--', '--no-alt-screen', '-c', 'tui.resume_cwd="session"', ...(id ? ['fork', id] : [])];
 const terminal = new xterm.Terminal({ cols: 80, rows: 24, allowProposedApi: true });
 const titles = [];
 terminal.onTitleChange(title => titles.push(title));
@@ -22,6 +22,7 @@ const hudRow = () => lines().findLastIndex(line => line.startsWith('>_ GAONA-HUB
 async function until(predicate, label, timeout = 30000) {
   const start = Date.now();
   while (!predicate()) {
+    if (exited) throw new Error(`Codex terminó antes de completar ${label}: código ${exitCode}`);
     if (Date.now() - start > timeout) throw new Error(`Timeout: ${label}`);
     await sleep(100);
   }

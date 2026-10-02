@@ -1,5 +1,6 @@
 import { renderHud, clip, safeText } from './render.js';
 import { scrollbarRows } from './scrollbar.js';
+import { cellHyperlink, closeHyperlink } from './terminal-links.js';
 
 export function sessionFromTitle(title) {
   title = title.split(' | ')[0];
@@ -9,10 +10,15 @@ export function sessionFromTitle(title) {
   return match ? match[1] : null;
 }
 
-export function titleSignals(title) {
+export function titleSignals(title, { allowPending = false } = {}) {
   const prefix = sessionFromTitle(title);
-  if (!prefix) return null;
-  const [, model, effort, status, fast] = title.split(' | ');
+  const parts = title.split(' | ');
+  if (!prefix && (!allowPending || parts.length !== 4 ||
+      !/^[a-z0-9][a-z0-9._:/-]*$/i.test(parts[0]) ||
+      !/^(default|none|minimal|low|medium|high|xhigh|max|ultra)$/.test(parts[1]) ||
+      !/^(Ready|Working|Starting|Waiting|Blocked|Interrupted)$/.test(parts[2]) ||
+      !/^Fast (on|off)$/.test(parts[3]))) return null;
+  const [model, effort, status, fast] = prefix ? parts.slice(1) : parts;
   const signals = {};
   if (model && !/(\.\.\.|…)$/.test(model)) signals.model = model;
   if (effort && !/(\.\.\.|…)$/.test(effort)) signals.effort = effort;
@@ -64,15 +70,21 @@ export function bufferRows(terminal) {
   const output = [];
   for (let row = 0; row < terminal.rows; row++) {
     const line = buffer.getLine(buffer.viewportY + row);
-    let rendered = '', previous = '';
+    let rendered = '', previous = '', previousLink = '';
     for (let col = 0; col < terminal.cols; col++) {
       const cell = line?.getCell(col);
       if (!cell || cell.getWidth() === 0) continue;
+      const link = cellHyperlink(terminal, cell);
+      if (link !== previousLink) {
+        if (previousLink) rendered += closeHyperlink;
+        if (link) rendered += link;
+        previousLink = link;
+      }
       const style = cellStyle(cell);
       if (style !== previous) { rendered += style; previous = style; }
       rendered += cell.getChars() || ' ';
     }
-    output.push(rendered + '\x1b[0m');
+    output.push(rendered + (previousLink ? closeHyperlink : '') + '\x1b[0m');
   }
   return output;
 }
@@ -115,12 +127,17 @@ export function isCompacting(terminal) {
 export function drawFrame(terminal, layout, previous = [], approximateOffset = 0, options = {}) {
   const gutter = scrollbarRows(terminal, options, approximateOffset);
   const lines = [...bufferRows(terminal).map((line, row) => `${line}${gutter[row]}`), ...layout.footer];
-  let text = '\x1b[?2026h\x1b[?25l';
+  let changes = '';
   for (let row = 0; row < lines.length; row++) {
-    if (lines[row] !== previous[row]) text += `\x1b[${row + 1};1H\x1b[0m\x1b[2K${lines[row]}`;
+    if (lines[row] !== previous[row]) changes += `\x1b[${row + 1};1H\x1b[0m\x1b[2K${lines[row]}`;
   }
   const cursorRow = Math.min(layout.chatRows, terminal.buffer.active.cursorY + 1);
   const cursorColumn = Math.min(layout.chatColumns, terminal.buffer.active.cursorX + 1);
-  text += `\x1b[0m\x1b[${cursorRow};${cursorColumn}H\x1b[?25h\x1b[?2026l`;
-  return { text, lines };
+  const visible = !terminal._core?.coreService?.isCursorHidden;
+  const cursor = `${cursorRow};${cursorColumn};${visible}`;
+  // Un refresh de métricas sin cambios no debe tocar el cursor del terminal.
+  const text = changes || cursor !== options.previousCursor
+    ? `\x1b[?2026h\x1b[?25l${changes}\x1b[0m\x1b[${cursorRow};${cursorColumn}H\x1b[?25${visible ? 'h' : 'l'}\x1b[?2026l`
+    : '';
+  return { text, lines, cursor };
 }

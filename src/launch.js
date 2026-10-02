@@ -4,13 +4,13 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export function resolveCodex(explicit) {
+export function resolveCodex(explicit, env = process.env) {
   if (explicit) return explicit;
-  if (process.env.CODEX_HUB_CODEX_PATH) return process.env.CODEX_HUB_CODEX_PATH;
+  if (env.CODEX_HUB_CODEX_PATH) return env.CODEX_HUB_CODEX_PATH;
   if (process.platform === 'win32') {
-    const desktop = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe');
+    const desktop = path.join(env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe');
     if (existsSync(desktop)) return desktop;
-    const npm = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm', 'node_modules', '@openai', 'codex');
+    const npm = path.join(env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm', 'node_modules', '@openai', 'codex');
     const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
     for (const base of [path.join(npm, 'node_modules', '@openai', `codex-win32-${process.arch}`), npm]) {
       const binary = path.join(base, 'vendor', `${arch}-pc-windows-msvc`, 'codex', 'codex.exe');
@@ -31,13 +31,13 @@ export function footerOverride(nodePath, cliPath, platform = process.platform) {
   };
   return `tui.status_line=${JSON.stringify([`command: ${quote(nodePath)} ${quote(cliPath)} status --footer --color`])}`;
 }
-export function launchCodex(args, { executable, cwd, native = false, onSpawn } = {}) {
-  const command = resolveCodex(executable);
-  if (native && !executable && !process.env.CODEX_HUB_CODEX_PATH) throw new Error('--native requiere --codex <binario con soporte command: status_line>. El HUD independiente funciona con Codex oficial.');
+export function launchCodex(args, { executable, cwd, native = false, onSpawn, spawnProcess = spawn, env } = {}) {
+  const command = resolveCodex(executable, env);
+  if (native && !executable && !(env || process.env).CODEX_HUB_CODEX_PATH) throw new Error('--native requiere --codex <binario con soporte command: status_line>. El HUD independiente funciona con Codex oficial.');
   const cli = fileURLToPath(new URL('../bin/codex-hub.js', import.meta.url));
   const childArgs = native ? ['-c', footerOverride(process.execPath, cli), ...args] : args;
   return new Promise((resolve, reject) => {
-    const child = spawn(command, childArgs, { cwd, stdio: 'inherit', shell: false, windowsHide: true });
+    const child = spawnProcess(command, childArgs, { cwd, env, stdio: 'inherit', shell: false, windowsHide: true });
     child.once('spawn', () => onSpawn?.(child));
     child.once('error', error => reject(new Error(error.code === 'ENOENT' ? 'No se encontró Codex CLI. Instálalo o indica --codex <ruta a codex.exe>.' : error.message)));
     child.once('exit', (code, signal) => resolve(code ?? (signal ? 130 : 1)));

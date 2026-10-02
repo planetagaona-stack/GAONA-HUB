@@ -123,6 +123,7 @@ export async function integratedTerminal(store, options, args) {
   let runtimeSignals = {};
   let selectedModel = null;
   let alternateScrollOffset = 0;
+  let previousCursor;
   let windowTitle = null;
   const updateTitle = () => {
     const label = projectWindowTitle(state, cwd, options);
@@ -154,9 +155,10 @@ export async function integratedTerminal(store, options, args) {
       // El mouse queda desactivado para que Windows Terminal conserve
       // Ctrl+clic, selección y rueda, aunque Codex lo solicite.
     }
-    const result = drawFrame(terminal, layout, frame, alternateScrollOffset, options);
+    const result = drawFrame(terminal, layout, frame, alternateScrollOffset, { ...options, previousCursor });
     frame = result.lines;
-    process.stdout.write(output + result.text);
+    previousCursor = result.cursor;
+    if (output || result.text) process.stdout.write(output + result.text);
   };
   const schedule = () => { if (!painting && !stopped) painting = setTimeout(paint, 25); };
   const setSelectedModel = model => {

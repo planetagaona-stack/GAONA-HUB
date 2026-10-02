@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0
+
+- El inicio normal abre una ventana identificada con Codex nativo arriba y el
+  HUD en un panel inferior independiente. El HUB no captura el teclado ni el
+  mouse del chat, ni reconstruye su pantalla.
+- Ambos paneles se crean en una sola operación de Windows Terminal; no se
+  divide la última conversación enfocada por el usuario.
+- Las métricas se vinculan por el título de sesión leído con un auxiliar de
+  sólo lectura. Hasta que Codex guarda métricas, los campos quedan sin datos.
+- El emulador anterior queda bajo `--integrated`, con sus límites de scroll.
+  En ese modo se corrige la pérdida de enlaces OSC8 y el repintado vacío.
+- El instalador sólo cambia perfiles, PATH persistente y efectos de Windows
+  Terminal cuando se solicita la opción correspondiente explícitamente.
+
 ## 0.6.1
 
 - La barra del historial queda visual y Windows Terminal conserva Ctrl+clic,

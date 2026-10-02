@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Uninstall, [switch]$IntegrateCodex, [switch]$GlowCurrentPowerShell)
+param([switch]$Uninstall, [switch]$IntegrateCodex, [switch]$ConfigureTerminal, [switch]$GlowCurrentPowerShell, [switch]$AddToUserPath)
 $ErrorActionPreference = 'Stop'
 $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
 if (-not $npmCommand) { throw 'Instala Node.js 20+ desde https://nodejs.org y abre de nuevo PowerShell.' }
@@ -67,7 +67,7 @@ if (-not $updatedInPlace) {
     if ($LASTEXITCODE -ne 0) { throw 'Falló la instalación de Gaona-HUB.' }
 }
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (($userPath -split ';') -notcontains $prefix) { [Environment]::SetEnvironmentVariable('Path', "$prefix;$userPath", 'User') }
+if ($AddToUserPath -and ($userPath -split ';') -notcontains $prefix) { [Environment]::SetEnvironmentVariable('Path', "$prefix;$userPath", 'User') }
 $env:Path = "$prefix;$env:Path"
 if ($IntegrateCodex) {
     $node = (Get-Command node.exe -ErrorAction Stop).Source
@@ -85,5 +85,7 @@ if ($IntegrateCodex) {
     Write-Host 'Codex integrado en PowerShell: abre una terminal nueva o carga tu perfil.' -ForegroundColor Cyan
 }
 & (Join-Path $prefix 'gaona-hub.cmd') doctor
-& (Join-Path $prefix 'node_modules\gaona-hub\scripts\configure-terminal.ps1') -CurrentPowerShell:$GlowCurrentPowerShell
+if ($ConfigureTerminal -or $GlowCurrentPowerShell) {
+    & (Join-Path $prefix 'node_modules\gaona-hub\scripts\configure-terminal.ps1') -CurrentPowerShell:$GlowCurrentPowerShell
+}
 Write-Host "`nListo. Iniciar: gaona-hub.cmd. Reanudar: gaona-hub.cmd -- resume <id>" -ForegroundColor Cyan
