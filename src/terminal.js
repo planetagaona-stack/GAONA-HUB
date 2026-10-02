@@ -18,6 +18,27 @@ export function projectWindowTitle(state, cwd, { title, home = os.homedir() } = 
   return clean(state.project || path.win32.basename(directory.replace(/[\\/]+$/, '')) || directory) || 'Codex';
 }
 
+export function applyCompactionView(terminal, child, frame, layout, state, runtimeSignals, compacting, frameNumber, options) {
+  const nextRuntimeSignals = { ...runtimeSignals, compacting };
+  if (compacting) nextRuntimeSignals.compactionFrame = frameNumber;
+  else delete nextRuntimeSignals.compactionFrame;
+  const nextState = { ...state, ...nextRuntimeSignals };
+  if (!compacting) delete nextState.compactionFrame;
+  const nextLayout = layoutScreen(layout.columns, layout.rows, nextState, options);
+  let nextFrame = frame;
+  if (terminal.cols !== nextLayout.columns || terminal.rows !== nextLayout.chatRows) {
+    terminal.resize(nextLayout.columns, nextLayout.chatRows);
+    child?.resize(nextLayout.columns, nextLayout.chatRows);
+    nextFrame = [];
+  }
+  return {
+    runtimeSignals: nextRuntimeSignals,
+    state: nextState,
+    layout: nextLayout,
+    frame: nextFrame
+  };
+}
+
 const pasteStart = '\x1b[200~';
 const pasteEnd = '\x1b[201~';
 const shiftPageUp = '\x1b[5;2~';
@@ -156,22 +177,25 @@ export async function integratedTerminal(store, options, args) {
     const compacting = isCompacting(terminal);
     if (compacting === Boolean(runtimeSignals.compacting)) return;
     clearInterval(compactionTimer);
+    const updateView = (active, frameNumber) => {
+      const next = applyCompactionView(terminal, child, frame, layout, state, runtimeSignals, active, frameNumber, options);
+      runtimeSignals = next.runtimeSignals;
+      state = next.state;
+      layout = next.layout;
+      frame = next.frame;
+    };
     if (compacting) {
-      runtimeSignals.compacting = true;
-      runtimeSignals.compactionFrame = 0;
+      updateView(true, 0);
       if (options.color !== false) {
         compactionTimer = setInterval(() => {
           if (!isCompacting(terminal)) { syncCompaction(); return; }
-          runtimeSignals.compactionFrame = (runtimeSignals.compactionFrame + 1) % 6;
-          state = { ...state, ...runtimeSignals };
+          updateView(true, (runtimeSignals.compactionFrame + 1) % 6);
           schedule();
         }, 180);
       }
     } else {
-      delete runtimeSignals.compacting;
-      delete runtimeSignals.compactionFrame;
+      updateView(false, 0);
     }
-    state = { ...state, ...runtimeSignals };
     schedule();
   };
   const refresh = async () => {

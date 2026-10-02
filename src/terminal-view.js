@@ -83,13 +83,17 @@ export function footerSession(terminal) {
 
 export function isCompacting(terminal) {
   const buffer = terminal.buffer.active;
-  const end = Math.min(buffer.length, buffer.baseY + terminal.rows);
-  const start = Math.max(0, end - 8);
+  const start = buffer.viewportY ?? buffer.baseY;
+  const end = Math.min(buffer.length, start + terminal.rows);
+  const textAt = row => buffer.getLine(row)?.translateToString(true) || '';
   for (let row = start; row + 1 < end; row++) {
-    const header = buffer.getLine(row)?.translateToString(true).trim() || '';
-    const detail = buffer.getLine(row + 1)?.translateToString(true).trim() || '';
-    if (/^(?:•|∙|\*)\s*Compacting context(?:\s|$)/u.test(header)
-      && /^└\s*Making room to continue\./u.test(detail)) return true;
+    const header = textAt(row);
+    const detail = textAt(row + 1);
+    if (!/^(?:•|∙|\*)\s*Compacting context(?:\s|$)/u.test(header)
+      || !/^ {2}└\s*Making room to continue\./u.test(detail)) continue;
+    let composer = row + 2;
+    while (composer < end && composer - row <= 5 && !textAt(composer).trim()) composer++;
+    if (composer < end && /^\s*›(?:\s|$)/u.test(textAt(composer))) return true;
   }
   return false;
 }
