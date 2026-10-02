@@ -32,8 +32,10 @@ líneas que sí separen secciones.
 - La barra tendrá un gutter propio de una columna para no tapar texto del chat;
   el PTY de Codex y el renderer se ajustarán juntos al ancho disponible.
 - Si el selector de modelos está visible, el modelo marcado `(current)` será la
-  fuente viva de `MODEL`; el valor se conserva en memoria al cerrar el selector
-  para evitar que el último `turn_context` reemplace la selección actual.
+  fuente viva de `MODEL`. Al confirmar con Enter, el modelo resaltado pasa a
+  ser el valor activo y se conserva en memoria al cerrar el selector para que
+  el último `turn_context` o una señal de título antigua no lo reemplacen. Al
+  cambiar a otra sesión, se limpia ese valor retenido.
 
 ## Arquitectura y estados límite
 
@@ -48,8 +50,8 @@ Si no hay historial adicional, tampoco se dibuja la pista. El redimensionado
 mantendrá sincronizados el emulador, el PTY y el gutter.
 
 El lector del selector inspeccionará solo las filas visibles del buffer activo
-y retendrá únicamente el identificador del modelo marcado `(current)`. No
-guardará texto del chat ni otras líneas del selector.
+y retendrá únicamente los identificadores del modelo actual y de la opción
+resaltada. No guardará texto del chat ni otras líneas del selector.
 
 La barra nativa de Windows Terminal pertenece al buffer externo de la ventana.
 La navegación funcional se implementará dentro del viewport del HUB, que es
@@ -63,6 +65,7 @@ pueden seguir mostrando el modelo del turno anterior tras cambiar la selección.
 Revisar que el deslizador coincida con los extremos y posiciones intermedias del
 historial, que el arrastre no consuma eventos del resto del chat, y que el
 gutter se mantenga alineado al cambiar el tamaño de la terminal. Revisar también
-que `MODEL` cambie al modelo marcado `(current)` y que se mantenga correcto al
-cerrar el selector y refrescar los datos de sesión. La revisión de código y los
+que `MODEL` refleje `(current)`, cambie al confirmar otra opción y se mantenga
+correcto al cerrar el selector y refrescar los datos de sesión. La revisión de
+código y los
 checks del PR cubrirán el cambio antes de cualquier integración.

@@ -43,18 +43,20 @@ const heading = options.color === false
 ```
 
 - [ ] Conservar cualquier línea que se use para separar secciones; no reemplazar el relleno eliminado con otro adorno.
-- [ ] Crear `modelFromPicker(terminal)`. Revisar `translateToString(true)` de las filas visibles del buffer activo y extraer solo un identificador de modelo en una opción terminada en `(current)`, con o sin el prefijo `>` de selección. Devolver `null` si no hay un único marcador válido.
+- [ ] Crear `modelPickerState(terminal)`. Revisar `translateToString(true)` de las filas visibles del buffer activo y extraer solo los identificadores de las opciones numeradas. Reconocer los marcadores de fila activa `>`, `›` y `❯`; devolver `null` salvo que exista exactamente una opción `(current)` y una opción activa.
 
 ```js
-export function modelFromPicker(terminal) {
+export function modelPickerState(terminal) {
   const buffer = terminal.buffer.active;
-  const candidates = new Set();
+  let current = null, active = null, currentCount = 0, activeCount = 0;
   for (let row = 0; row < terminal.rows; row++) {
     const line = buffer.getLine(buffer.viewportY + row)?.translateToString(true) || '';
-    const match = /^\s*>?\s*\d+\.\s+([a-z0-9][a-z0-9._:/-]*)\s+\(current\)(?:\s|$)/i.exec(line);
-    if (match) candidates.add(match[1]);
+    const match = /^\s*([>›❯])?\s*\d+\.\s+([a-z0-9][a-z0-9._:/-]*)(?:\s+\(current\))?(?:\s{2,}|$)/i.exec(line);
+    if (!match) continue;
+    if (match[3]) { current = match[2]; currentCount++; }
+    if (match[1]) { active = match[2]; activeCount++; }
   }
-  return candidates.size === 1 ? candidates.values().next().value : null;
+  return currentCount === 1 && activeCount === 1 ? { current, active } : null;
 }
 ```
 
@@ -74,7 +76,9 @@ tokens.push({
 });
 ```
 
-- [ ] En el callback de `terminal.write` de `child.onData`, llamar `modelFromPicker(terminal)`. Si devuelve un modelo, asignarlo a `runtimeSignals.model` y `state.model` antes de programar el frame. Conservarlo en memoria cuando el selector se cierre para que `refresh()` no lo reemplace por un `turn_context` antiguo.
+- [ ] En el callback de `terminal.write` de `child.onData`, llamar `modelPickerState(terminal)`. Si devuelve datos, guardar `current` como el modelo retenido y reflejarlo en `state.model`.
+- [ ] Antes de reenviar texto que contiene Enter al hijo, consultar `modelPickerState(terminal)`. Si existe, guardar `active` como el nuevo modelo retenido; Enter en el composer no cambia nada porque el parser devuelve `null` fuera del selector.
+- [ ] Al cambiar el UUID de sesión en `onTitleChange`, limpiar el modelo retenido antes de aplicar las señales de título de la sesión nueva. Durante la misma sesión, aplicar el modelo retenido después de `runtimeSignals` en cada actualización de estado para que una señal vieja no lo revierta.
 
 - [ ] Solicitar tracking SGR de arrastre (`1002`) al terminal exterior. Al reenviar reportes al hijo, mantener la condición existente basada en `terminal.modes.mouseTrackingMode`; así los eventos añadidos por el HUB fuera del gutter no llegan a Codex si este no pidió tracking.
 - [ ] Mantener `scrollbarDragging` y `scrollbarDragOffset`. Un press izquierdo (`action === 'M'`, botón izquierdo en `code`) en la última columna del terminal y dentro de `chatRows` inicia el arrastre. Si el press cae fuera del thumb, centrar el thumb en esa fila y saltar al destino.
@@ -95,7 +99,7 @@ tokens.push({
 ## Autorrevisión contra el diseño aprobado
 
 - Dirección visual: cian/gris discreto, un solo gutter, sin animación; `--ascii` y `--no-color` considerados.
-- Modelo: leer exclusivamente la opción `(current)`, ignorar otras opciones resaltadas y mantener el modelo leído al cerrar el selector.
+- Modelo: leer la opción `(current)`, actualizar al confirmar la fila activa con Enter, ignorar filas resaltadas sin confirmar y mantener el modelo al cerrar el selector o refrescar la sesión actual.
 - Comportamiento: posición proporcional, clic y arrastre, sin retirar rueda ni atajos existentes.
 - Aislamiento: solo renderer, controlador del terminal y módulo nuevo de geometría; las demás métricas del HUD, compactación y perfil externo quedan fuera del cambio. El título del HUD deja de tener regla de relleno, manteniendo los separadores existentes.
 - Estados límite: buffer alternativo, historial vacío, thumb que ocupa toda la pista, release fuera del chat y redimensionado están cubiertos.
