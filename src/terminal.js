@@ -137,7 +137,7 @@ export async function integratedTerminal(store, options, args) {
   const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
   let selectedModel = null;
-  let alternateScrollOffset = 0, scrollbarDragging = false, scrollbarDragOffset = 0;
+  let alternateScrollOffset = 0, scrollbarDragging = false, scrollbarDragOffset = 0, childMousePressed = false;
   let windowTitle = null;
   const updateTitle = () => {
     const label = projectWindowTitle(state, cwd, options);
@@ -166,10 +166,10 @@ export async function integratedTerminal(store, options, args) {
       if (modes.applicationCursorKeysMode) output += '\x1b[?1h';
       if (modes.bracketedPasteMode) output += '\x1b[?2004h';
       if (modes.sendFocusMode) output += '\x1b[?1004h';
-      // Captura la rueda en el HUB aunque Codex no solicite tracking; si no,
-      // Windows Terminal puede convertirla en flechas.
-      const mouse = modes.mouseTrackingMode === 'any' ? 1003 : 1002;
-      output += `\x1b[?${mouse}h\x1b[?1006h`;
+      // Reflect only the mouse mode requested by Codex. With no request,
+      // Windows Terminal keeps native Ctrl+click and selection.
+      const mouse = { x10: 1000, vt200: 1000, drag: 1002, any: 1003 }[modes.mouseTrackingMode];
+      if (mouse) output += `\x1b[?${mouse}h\x1b[?1006h`;
     }
     const result = drawFrame(terminal, layout, frame, alternateScrollOffset, options);
     frame = result.lines;
@@ -245,6 +245,13 @@ export async function integratedTerminal(store, options, args) {
     alternateScrollOffset = next;
     schedule();
   };
+  const relayMouse = token => {
+    const x = Math.max(1, Math.min(layout.chatColumns, token.x));
+    const y = Math.max(1, Math.min(layout.chatRows, token.y));
+    child.write(`\x1b[<${token.code};${x};${y}${token.action}`);
+    if (token.action === 'm') childMousePressed = false;
+    else if ((token.code & 64) === 0 && (token.code & 32) === 0) childMousePressed = true;
+  };
   const scrollChat = (direction, lines = layout.chatRows) => {
     if (terminal.buffer.active.type === 'alternate') {
       const pages = Math.max(1, Math.ceil(lines / layout.chatRows));
@@ -290,12 +297,17 @@ export async function integratedTerminal(store, options, args) {
         const direction = (token.code & 1) === 0 ? -1 : 1;
         const buffer = terminal.buffer.active;
         const childTracksMouse = terminal.modes.mouseTrackingMode && terminal.modes.mouseTrackingMode !== 'none';
-        if (buffer.type === 'alternate' && childTracksMouse) {
+        if (buffer.type === 'alternate' && childTracksMouse && token.x !== layout.columns) {
           const wheelStep = 3 / layout.chatRows;
           alternateScrollOffset = Math.max(0, Math.min(alternateScrollRange, alternateScrollOffset + (direction < 0 ? wheelStep : -wheelStep)));
           child.write(token.raw);
           schedule();
         } else scrollChat(direction, 3);
+        continue;
+      }
+      const childGestureEvent = token.action === 'm' || (token.action === 'M' && (token.code & 32) !== 0);
+      if (childMousePressed && childGestureEvent) {
+        relayMouse(token);
         continue;
       }
       if (scrollbarDragging && token.action === 'M') {
@@ -333,7 +345,7 @@ export async function integratedTerminal(store, options, args) {
       const mouseMode = terminal.modes.mouseTrackingMode;
       if (!mouseMode || mouseMode === 'none') continue;
       if ((token.code & 32) !== 0 && mouseMode !== 'drag' && mouseMode !== 'any') continue;
-      child.write(token.raw);
+      relayMouse(token);
     }
     // Escape sola es una tecla válida. Espera brevemente por si viene una
     // secuencia más larga; después, reenvía el prefijo incompleto.

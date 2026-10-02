@@ -17,8 +17,9 @@ sistema visual actual. No tendrá animación ni etiquetas permanentes. El gutter
 mantendrá un ancho estable de una columna. La posición será proporcional cuando
 xterm tenga scrollback propio; en el buffer alternativo fullscreen de Codex se
 mostrará una posición estimada, porque el HUB no puede leer el porcentaje real.
-`--ascii` y
-`--no-color` conservarán sus variantes legibles. En el encabezado del HUD se
+`--ascii` y `--no-color` conservarán sus variantes legibles. GAONA-HUB no
+activará mouse tracking por su cuenta: sin tracking pedido por Codex, Windows
+Terminal conserva Ctrl+clic y la selección nativa. En el encabezado del HUD se
 eliminará la regla que rellena el espacio después del título y se mantendrán las
 líneas que sí separen secciones.
 
@@ -29,9 +30,10 @@ líneas que sí separen secciones.
 - En el buffer alternativo, la posición se estimará a partir de la rueda, los
   atajos de página y los movimientos del deslizador; puede desviarse si Codex
   desplaza el chat por otro mecanismo.
-- Arrastrar el deslizador moverá el viewport del chat. Hacer clic en la pista
-  saltará hacia esa zona del historial.
-- La rueda del mouse y `Shift+PageUp` / `Shift+PageDown` seguirán funcionando.
+- Cuando Codex ya solicite mouse tracking, arrastrar el deslizador moverá el
+  viewport y hacer clic en la pista saltará hacia esa zona del historial.
+- `Shift+PageUp` / `Shift+PageDown` seguirán funcionando. Si Codex no solicita
+  mouse tracking, el HUB no interceptará la rueda ni los clics nativos.
 - Los eventos fuera de la columna de la barra seguirán llegando a Codex. Los
   eventos del footer seguirán perteneciendo al HUD.
 - La barra tendrá un gutter propio de una columna para no tapar texto del chat;
@@ -50,9 +52,11 @@ mouse conservará columna, fila y tipo de evento para identificar clic, arrastre
 y liberación. Durante el arrastre, la posición del puntero se convertirá en una
 posición de viewport acotada al historial disponible.
 
-El buffer alternativo no expone su scrollback. Ahí la barra representará hasta
-120 avances de página estimados y convertirá el clic/arrastre en `PageUp` o
-`PageDown`. No afirmará una proporción exacta. En el buffer normal sin historial
+El buffer alternativo no expone su scrollback. Cuando Codex solicite mouse
+tracking, la barra representará hasta 120 avances de página estimados y
+convertirá el clic/arrastre en `PageUp` o `PageDown`; no afirmará una proporción
+exacta. Si Codex no solicita mouse tracking, la barra será visual y los eventos
+nativos quedarán en Windows Terminal. En el buffer normal sin historial
 adicional, el gutter quedará vacío. El redimensionado mantendrá sincronizados el
 emulador, el PTY y el gutter.
 

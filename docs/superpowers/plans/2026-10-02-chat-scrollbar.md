@@ -15,7 +15,8 @@
 - Crear `src/scrollbar.js`: geometría del thumb, conversión de la fila del puntero a `viewportY` y glifos de la pista.
 - Modificar `src/terminal-view.js`: reservar el gutter de una celda, componerlo junto al frame del chat, quitar la regla que rellena el encabezado después del título y leer el modelo marcado como actual en el buffer visible.
 - Modificar `src/terminal.js`: sincronizar ancho del PTY, preservar coordenadas SGR, controlar clic/arrastre y aplicar el modelo actual leído del selector sin alterar rueda ni atajos existentes.
-- La revisión se limita a esos tres archivos. No se cambian el HUD, sus métricas, el estilo de compactación ni los perfiles de Windows Terminal.
+- Actualizar las expectativas existentes de `test/terminal.test.js` para el gutter y el encabezado. No se agregan ni ejecutan tests.
+- No se cambian el HUD, sus métricas, el estilo de compactación ni los perfiles de Windows Terminal.
 
 ## Tarea 1: geometría y representación de la barra
 
@@ -28,7 +29,7 @@ const maxScroll = buffer.baseY;
 const size = Math.max(1, Math.min(rows, Math.round(rows * rows / (maxScroll + rows))));
 const top = Math.max(0, Math.min(rows - size,
   Math.round((buffer.viewportY / maxScroll) * (rows - size))));
-  return { top, size, maxScroll, mode: 'exact' };
+return { top, size, maxScroll, mode: 'exact' };
 ```
 
   Para el buffer alternativo, invertir la dirección visual del offset: `0` queda
@@ -84,10 +85,10 @@ tokens.push({
 - [ ] Antes de reenviar texto que contiene Enter al hijo, consultar `modelPickerState(terminal)`. Si existe, guardar `active` como el nuevo modelo retenido; Enter en el composer no cambia nada porque el parser devuelve `null` fuera del selector.
 - [ ] Al cambiar el UUID de sesión en `onTitleChange`, limpiar el modelo retenido antes de aplicar las señales de título de la sesión nueva. Durante la misma sesión, aplicar el modelo retenido después de `runtimeSignals` en cada actualización de estado para que una señal vieja no lo revierta.
 
-- [ ] Solicitar tracking SGR de arrastre (`1002`) al terminal exterior. Al reenviar reportes al hijo, mantener la condición existente basada en `terminal.modes.mouseTrackingMode`; así los eventos añadidos por el HUB fuera del gutter no llegan a Codex si este no pidió tracking.
+- [ ] No solicitar mouse tracking por cuenta del HUB. Reflejar solo el modo que Codex ya pidió; si no pidió tracking, dejar Ctrl+clic, selección y rueda en Windows Terminal. En ese caso la barra es visual y no intercepta eventos.
 - [ ] Mantener `scrollbarDragging`, `scrollbarDragOffset` y el offset alternativo estimado. Un press izquierdo (`action === 'M'`, botón izquierdo en `code`) en la última columna del terminal y dentro de `chatRows` inicia el arrastre. Si el press cae fuera del thumb, centrar el thumb en esa fila y saltar al destino.
 - [ ] Mientras se arrastra, mapear la fila SGR a `scrollTarget(...)`. En buffer normal, llamar `terminal.scrollLines(target - terminal.buffer.active.viewportY)`; en buffer alternativo, enviar la diferencia estimada como `PageUp` / `PageDown`. Procesar el release (`action === 'm'`) antes de filtrar eventos del footer, para terminar el gesto aunque el puntero salga del chat.
-- [ ] Interceptar exclusivamente la columna del gutter para clic/arrastre. Conservar el encaminamiento actual de rueda, `Shift+PageUp` y `Shift+PageDown`, y el tratamiento de eventos en el resto del chat/footer.
+- [ ] Interceptar exclusivamente la columna del gutter para clic/arrastre cuando Codex ya pidió tracking. Conservar `Shift+PageUp` y `Shift+PageDown`; si un gesto que empezó en el chat cruza al gutter, reenviar el movimiento y la liberación al hijo con coordenadas limitadas al PTY.
 
 ## Tarea 3: revisión estática y entrega en rama
 
