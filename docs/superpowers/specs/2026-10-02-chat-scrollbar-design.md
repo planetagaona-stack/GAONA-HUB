@@ -17,9 +17,9 @@ sistema visual actual. No tendrá animación ni etiquetas permanentes. El gutter
 mantendrá un ancho estable de una columna. La posición será proporcional cuando
 xterm tenga scrollback propio; en el buffer alternativo fullscreen de Codex se
 mostrará una posición estimada, porque el HUB no puede leer el porcentaje real.
-`--ascii` y `--no-color` conservarán sus variantes legibles. GAONA-HUB no
-activará mouse tracking por su cuenta: sin tracking pedido por Codex, Windows
-Terminal conserva Ctrl+clic y la selección nativa. En el encabezado del HUD se
+`--ascii` y `--no-color` conservarán sus variantes legibles. GAONA-HUB mantendrá
+el mouse tracking desactivado aunque Codex lo solicite. Windows Terminal
+conservará Ctrl+clic, selección y rueda; la barra será únicamente visual. En el encabezado del HUD se
 eliminará la regla que rellena el espacio después del título y se mantendrán las
 líneas que sí separen secciones.
 
@@ -30,12 +30,10 @@ líneas que sí separen secciones.
 - En el buffer alternativo, la posición se estimará a partir de la rueda, los
   atajos de página y los movimientos del deslizador; puede desviarse si Codex
   desplaza el chat por otro mecanismo.
-- Cuando Codex ya solicite mouse tracking, arrastrar el deslizador moverá el
-  viewport y hacer clic en la pista saltará hacia esa zona del historial.
-- `Shift+PageUp` / `Shift+PageDown` seguirán funcionando. Si Codex no solicita
-  mouse tracking, el HUB no interceptará la rueda ni los clics nativos.
-- Los eventos fuera de la columna de la barra seguirán llegando a Codex. Los
-  eventos del footer seguirán perteneciendo al HUD.
+- La barra es visual y no responde al clic ni al arrastre.
+- `Shift+PageUp` / `Shift+PageDown` seguirán desplazando el chat. El HUB no
+  captura ni reenvía eventos del mouse; Windows Terminal conserva su control
+  nativo de Ctrl+clic, selección y rueda.
 - La barra tendrá un gutter propio de una columna para no tapar texto del chat;
   el PTY de Codex y el renderer se ajustarán juntos al ancho disponible.
 - Si el selector de modelos está visible, el modelo marcado `(current)` será la
@@ -47,18 +45,15 @@ líneas que sí separen secciones.
 ## Arquitectura y estados límite
 
 La barra se dibujará al componer el frame del terminal y consultará el estado
-del buffer normal (`baseY`, `viewportY` y filas visibles). El parser SGR del
-mouse conservará columna, fila y tipo de evento para identificar clic, arrastre
-y liberación. Durante el arrastre, la posición del puntero se convertirá en una
-posición de viewport acotada al historial disponible.
+del buffer normal (`baseY`, `viewportY` y filas visibles). El HUB mantendrá
+desactivados los modos de mouse en el terminal exterior y no interpretará ni
+reenviará eventos SGR, aunque Codex active esos modos en su emulador interno.
 
-El buffer alternativo no expone su scrollback. Cuando Codex solicite mouse
-tracking, la barra representará hasta 120 avances de página estimados y
-convertirá el clic/arrastre en `PageUp` o `PageDown`; no afirmará una proporción
-exacta. Si Codex no solicita mouse tracking, la barra será visual y los eventos
-nativos quedarán en Windows Terminal. En el buffer normal sin historial
-adicional, el gutter quedará vacío. El redimensionado mantendrá sincronizados el
-emulador, el PTY y el gutter.
+El buffer alternativo no expone su scrollback. La barra representará hasta 120
+avances de página estimados a partir de `Shift+PageUp` y `Shift+PageDown`; no
+afirmará una proporción exacta. En el buffer normal sin historial adicional,
+el gutter quedará vacío. El redimensionado mantendrá sincronizados el emulador,
+el PTY y el gutter.
 
 El lector del selector inspeccionará solo las filas visibles del buffer activo
 y retendrá únicamente los identificadores del modelo actual y de la opción
@@ -73,10 +68,9 @@ pueden seguir mostrando el modelo del turno anterior tras cambiar la selección.
 
 ## Revisión y validación
 
-Revisar que el deslizador normal coincida con los extremos y posiciones
-intermedias del historial, que el estimador del buffer alternativo siga los
-eventos que controla el HUB, que el arrastre no consuma eventos del resto del
-chat, y que el gutter se mantenga alineado al cambiar el tamaño de la terminal.
+Revisar que la barra se mantenga visual y que los modos de mouse sigan
+desactivados aunque Codex los solicite. Revisar también que el gutter se
+mantenga alineado al cambiar el tamaño de la terminal.
 Revisar también que `MODEL` refleje `(current)`, cambie al confirmar otra opción y se mantenga
 correcto al cerrar el selector y refrescar los datos de sesión. La revisión de
 código y los

@@ -4,9 +4,9 @@
 
 **Meta:** permitir ver la posición dentro del historial de Codex y navegarlo con un deslizador funcional dentro del chat integrado.
 
-**Arquitectura:** un módulo pequeño calcula el tamaño, posición y destino del thumb desde el buffer normal de xterm. En el buffer alternativo de Codex, estima la posición desde las acciones de navegación que observa el HUB. El renderer añade una columna fija al borde del chat, y el controlador del terminal interpreta solo los reportes SGR sobre esa columna para hacer clic y arrastre; los demás eventos conservan la ruta actual.
+**Arquitectura:** un módulo pequeño calcula el tamaño y la posición del thumb desde el buffer normal de xterm. En el buffer alternativo de Codex, estima la posición desde los atajos de página. El renderer añade una columna fija al borde del chat; la barra es visual y el terminal conserva el control nativo de todos los eventos del mouse.
 
-**Stack:** Node.js ES modules, `@xterm/headless` 6.0.0, ANSI/SGR mouse, terminal de Windows.
+**Stack:** Node.js ES modules, `@xterm/headless` 6.0.0, secuencias VT para teclado y terminal de Windows.
 
 ---
 
@@ -14,7 +14,7 @@
 
 - Crear `src/scrollbar.js`: geometría del thumb, conversión de la fila del puntero a `viewportY` y glifos de la pista.
 - Modificar `src/terminal-view.js`: reservar el gutter de una celda, componerlo junto al frame del chat, quitar la regla que rellena el encabezado después del título y leer el modelo marcado como actual en el buffer visible.
-- Modificar `src/terminal.js`: sincronizar ancho del PTY, preservar coordenadas SGR, controlar clic/arrastre y aplicar el modelo actual leído del selector sin alterar rueda ni atajos existentes.
+- Modificar `src/terminal.js`: sincronizar ancho del PTY, mantener desactivados los modos de mouse, conservar los atajos de página y aplicar el modelo actual leído del selector.
 - Actualizar las expectativas existentes de `test/terminal.test.js` para el gutter y el encabezado. No se agregan ni ejecutan tests.
 - No se cambian el HUD, sus métricas, el estilo de compactación ni los perfiles de Windows Terminal.
 
@@ -33,10 +33,9 @@ return { top, size, maxScroll, mode: 'exact' };
 ```
 
   Para el buffer alternativo, invertir la dirección visual del offset: `0` queda
-  al fondo y `120` arriba. Marcarlo `mode: 'estimated'` para que el controlador
-  traduzca el drag a `PageUp` / `PageDown`.
+  al fondo y `120` arriba. Marcarlo `mode: 'estimated'` para indicar que la
+  posición es aproximada y se basa en atajos de página.
 
-- [ ] Crear `scrollTarget(pointerRow, pointerOffset, thumb, rows)`. Limitar el comienzo del thumb a `[0, rows - thumb.size]`; convertirlo a `[0, thumb.maxScroll]` para el buffer normal y usar la dirección invertida para el buffer alternativo. Si `rows === thumb.size`, devolver `0`.
 - [ ] Crear `scrollbarRows(terminal, options, approximateOffset)`. Para cada fila usar `│` de pista y `┃` de thumb; en `--ascii`, usar `|` y `#`. Colorear pista en gris azulado y thumb en cian solo cuando `options.color !== false`. En el buffer normal sin historial, devolver espacios para conservar el ancho.
 - [ ] En `layoutScreen`, exponer `chatColumns: Math.max(1, columns - 1)`. Mantener `columns` como ancho completo del terminal para que el HUD conserve su tamaño.
 - [ ] Quitar la regla horizontal que solo rellena el espacio después del título del HUD. Construir el encabezado solo con el título y su estilo actual:
@@ -72,29 +71,18 @@ export function modelPickerState(terminal) {
 **Archivo:** modificar `src/terminal.js`.
 
 - [ ] Crear el emulador y el PTY con `layout.chatColumns`. En `refresh` y `applyCompactionView`, comparar y redimensionar con `layout.chatColumns`; conservar `layout.columns` como ancho exterior.
-- [ ] Ampliar el token SGR del mouse para conservar `x`, `y` y el terminador (`M` o `m`):
-
-```js
-tokens.push({
-  type: 'mouse', raw: mouse[0], code: Number(mouse[1]),
-  x: Number(mouse[2]), y: Number(mouse[3]), action: mouse[4]
-});
-```
-
 - [ ] En el callback de `terminal.write` de `child.onData`, llamar `modelPickerState(terminal)`. Si devuelve datos, guardar `current` como el modelo retenido y reflejarlo en `state.model`.
 - [ ] Antes de reenviar texto que contiene Enter al hijo, consultar `modelPickerState(terminal)`. Si existe, guardar `active` como el nuevo modelo retenido; Enter en el composer no cambia nada porque el parser devuelve `null` fuera del selector.
 - [ ] Al cambiar el UUID de sesión en `onTitleChange`, limpiar el modelo retenido antes de aplicar las señales de título de la sesión nueva. Durante la misma sesión, aplicar el modelo retenido después de `runtimeSignals` en cada actualización de estado para que una señal vieja no lo revierta.
 
-- [ ] No solicitar mouse tracking por cuenta del HUB. Reflejar solo el modo que Codex ya pidió; si no pidió tracking, dejar Ctrl+clic, selección y rueda en Windows Terminal. En ese caso la barra es visual y no intercepta eventos.
-- [ ] Mantener `scrollbarDragging`, `scrollbarDragOffset` y el offset alternativo estimado. Un press izquierdo (`action === 'M'`, botón izquierdo en `code`) en la última columna del terminal y dentro de `chatRows` inicia el arrastre. Si el press cae fuera del thumb, centrar el thumb en esa fila y saltar al destino.
-- [ ] Mientras se arrastra, mapear la fila SGR a `scrollTarget(...)`. En buffer normal, llamar `terminal.scrollLines(target - terminal.buffer.active.viewportY)`; en buffer alternativo, enviar la diferencia estimada como `PageUp` / `PageDown`. Procesar el release (`action === 'm'`) antes de filtrar eventos del footer, para terminar el gesto aunque el puntero salga del chat.
-- [ ] Interceptar exclusivamente la columna del gutter para clic/arrastre cuando Codex ya pidió tracking. Conservar `Shift+PageUp` y `Shift+PageDown`; si un gesto que empezó en el chat cruza al gutter, reenviar el movimiento y la liberación al hijo con coordenadas limitadas al PTY.
+- [ ] Mantener desactivados los modos de mouse del terminal exterior, incluso si Codex los solicita internamente. No parsear ni reenviar eventos SGR; la barra es visual y Windows Terminal conserva Ctrl+clic, selección y rueda.
+- [ ] Conservar `Shift+PageUp` y `Shift+PageDown` para navegar el chat.
 
 ## Tarea 3: revisión estática y entrega en rama
 
 **Archivos:** los tres archivos de implementación anteriores.
 
-- [ ] Revisar manualmente la posición aproximada del buffer alternativo, los estados `baseY === 0`, thumb en los extremos, click sobre pista, drag hasta fuera del chat y resize.
+- [ ] Revisar manualmente la posición aproximada del buffer alternativo, los estados `baseY === 0`, el thumb en los extremos y el resize.
 - [ ] Ejecutar `rtk node --check src/scrollbar.js`, `rtk node --check src/terminal-view.js` y `rtk node --check src/terminal.js`.
 - [ ] Ejecutar `rtk git diff --check` y revisar `rtk git diff` para confirmar que el HUD y otros flujos no cambiaron.
 - [ ] No agregar ni ejecutar tests automatizados en esta tarea, según la instrucción activa de no hacerlo salvo solicitud del usuario.
@@ -105,6 +93,6 @@ tokens.push({
 
 - Dirección visual: cian/gris discreto, un solo gutter, sin animación; `--ascii` y `--no-color` considerados. El scrollback normal es exacto y Codex fullscreen usa una estimación.
 - Modelo: leer la opción `(current)`, actualizar al confirmar la fila activa con Enter, ignorar filas resaltadas sin confirmar y mantener el modelo al cerrar el selector o refrescar la sesión actual.
-- Comportamiento: posición proporcional, clic y arrastre, sin retirar rueda ni atajos existentes.
+- Comportamiento: barra visual, mouse nativo sin captura y navegación por `Shift+PageUp` / `Shift+PageDown`.
 - Aislamiento: solo renderer, controlador del terminal y módulo nuevo de geometría; las demás métricas del HUD, compactación y perfil externo quedan fuera del cambio. El título del HUD deja de tener regla de relleno, manteniendo los separadores existentes.
-- Estados límite: buffer alternativo, historial vacío, thumb que ocupa toda la pista, release fuera del chat y redimensionado están cubiertos.
+- Estados límite: buffer alternativo, historial vacío, thumb que ocupa toda la pista y redimensionado están cubiertos.

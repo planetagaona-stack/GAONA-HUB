@@ -23,14 +23,6 @@ export function scrollThumb(buffer, rows, approximateOffset = 0) {
   return { top, size, maxScroll, mode: 'estimated' };
 }
 
-export function scrollTarget(pointerRow, pointerOffset, thumb, rows) {
-  const travel = Math.max(0, rows - thumb.size);
-  const top = clamp(pointerRow - pointerOffset, 0, travel);
-  if (travel === 0) return 0;
-  const ratio = top / travel;
-  return Math.round((thumb.mode === 'exact' ? ratio : 1 - ratio) * thumb.maxScroll);
-}
-
 export function scrollbarRows(terminal, options = {}, approximateOffset = 0) {
   const thumb = scrollThumb(terminal.buffer.active, terminal.rows, approximateOffset);
   const track = options.ascii ? '|' : '│';

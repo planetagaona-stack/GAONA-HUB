@@ -6,7 +6,7 @@ import { CommandTracker } from './command-tracker.js';
 import { resolveCodex } from './launch.js';
 import { layoutScreen, drawFrame, titleSignals, modelPickerState, isCompacting } from './terminal-view.js';
 import { toSnapshot } from './signals.js';
-import { alternateScrollRange, scrollTarget, scrollThumb } from './scrollbar.js';
+import { alternateScrollRange } from './scrollbar.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
 // viewport. The outer terminal owns the fixed footer and forwards input.
@@ -53,8 +53,8 @@ function suffixPrefixLength(value, markers) {
   return 0;
 }
 
-// Conserva los reportes SGR entre fragmentos y no interpreta escapes dentro
-// del contenido de un pegado entre corchetes.
+// Conserva pegados y atajos de página entre fragmentos sin interpretar escapes
+// dentro del contenido de un pegado entre corchetes.
 function inputTokens(chunk, state) {
   const source = state.pending + chunk;
   const tokens = [];
@@ -82,7 +82,7 @@ function inputTokens(chunk, state) {
       continue;
     }
 
-    const markers = [pasteStart, shiftPageUp, shiftPageDown, '\x1b[<'];
+    const markers = [pasteStart, shiftPageUp, shiftPageDown];
     let next = -1, marker = '';
     for (const candidate of markers) {
       const at = source.indexOf(candidate, index);
@@ -109,21 +109,6 @@ function inputTokens(chunk, state) {
       continue;
     }
 
-    const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(source.slice(next));
-    if (mouse) {
-      flushText();
-      tokens.push({ type: 'mouse', raw: mouse[0], code: Number(mouse[1]), x: Number(mouse[2]), y: Number(mouse[3]), action: mouse[4] });
-      index = next + mouse[0].length;
-      continue;
-    }
-    const remainder = source.slice(next);
-    if (remainder.length <= 64 && /^\x1b\[<(?:\d+(?:;\d*(?:;\d*)?)?)?$/.test(remainder)) {
-      flushText();
-      state.pending = remainder;
-      break;
-    }
-    text += '\x1b[<';
-    index = next + 3;
   }
   flushText();
   return tokens;
@@ -137,7 +122,7 @@ export async function integratedTerminal(store, options, args) {
   const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
   let selectedModel = null;
-  let alternateScrollOffset = 0, scrollbarDragging = false, scrollbarDragOffset = 0, childMousePressed = false;
+  let alternateScrollOffset = 0;
   let windowTitle = null;
   const updateTitle = () => {
     const label = projectWindowTitle(state, cwd, options);
@@ -158,7 +143,7 @@ export async function integratedTerminal(store, options, args) {
     painting = null;
     if (stopped) return;
     const modes = terminal.modes;
-    const newModeKey = JSON.stringify([modes.applicationCursorKeysMode, modes.bracketedPasteMode, modes.sendFocusMode, modes.mouseTrackingMode]);
+    const newModeKey = JSON.stringify([modes.applicationCursorKeysMode, modes.bracketedPasteMode, modes.sendFocusMode]);
     let output = '';
     if (newModeKey !== modeKey) {
       modeKey = newModeKey;
@@ -166,10 +151,8 @@ export async function integratedTerminal(store, options, args) {
       if (modes.applicationCursorKeysMode) output += '\x1b[?1h';
       if (modes.bracketedPasteMode) output += '\x1b[?2004h';
       if (modes.sendFocusMode) output += '\x1b[?1004h';
-      // Reflect only the mouse mode requested by Codex. With no request,
-      // Windows Terminal keeps native Ctrl+click and selection.
-      const mouse = { x10: 1000, vt200: 1000, drag: 1002, any: 1003 }[modes.mouseTrackingMode];
-      if (mouse) output += `\x1b[?${mouse}h\x1b[?1006h`;
+      // El mouse queda desactivado para que Windows Terminal conserve
+      // Ctrl+clic, selección y rueda, aunque Codex lo solicite.
     }
     const result = drawFrame(terminal, layout, frame, alternateScrollOffset, options);
     frame = result.lines;
@@ -238,20 +221,6 @@ export async function integratedTerminal(store, options, args) {
       schedule();
     } finally { refreshing = false; }
   };
-  const setAlternateScrollOffset = target => {
-    const next = Math.max(0, Math.min(alternateScrollRange, Math.round(target)));
-    const pages = next - alternateScrollOffset;
-    if (pages) child.write((pages > 0 ? '\x1b[5~' : '\x1b[6~').repeat(Math.abs(pages)));
-    alternateScrollOffset = next;
-    schedule();
-  };
-  const relayMouse = token => {
-    const x = Math.max(1, Math.min(layout.chatColumns, token.x));
-    const y = Math.max(1, Math.min(layout.chatRows, token.y));
-    child.write(`\x1b[<${token.code};${x};${y}${token.action}`);
-    if (token.action === 'm') childMousePressed = false;
-    else if ((token.code & 64) === 0 && (token.code & 32) === 0) childMousePressed = true;
-  };
   const scrollChat = (direction, lines = layout.chatRows) => {
     if (terminal.buffer.active.type === 'alternate') {
       const pages = Math.max(1, Math.ceil(lines / layout.chatRows));
@@ -285,71 +254,10 @@ export async function integratedTerminal(store, options, args) {
         scrollChat(token.direction);
         continue;
       }
-      // Los eventos del pie pertenecen al HUD. La rueda vertical desplaza la
-      // conversación en vez de llegar al editor como historial de flechas.
-      if (scrollbarDragging && token.action === 'm') {
-        scrollbarDragging = false;
-        continue;
-      }
-      const verticalWheel = (token.code & 64) !== 0 && (token.code & 2) === 0;
-      if (verticalWheel) {
-        if (token.y > layout.chatRows) continue;
-        const direction = (token.code & 1) === 0 ? -1 : 1;
-        const buffer = terminal.buffer.active;
-        const childTracksMouse = terminal.modes.mouseTrackingMode && terminal.modes.mouseTrackingMode !== 'none';
-        if (buffer.type === 'alternate' && childTracksMouse && token.x !== layout.columns) {
-          const wheelStep = 3 / layout.chatRows;
-          alternateScrollOffset = Math.max(0, Math.min(alternateScrollRange, alternateScrollOffset + (direction < 0 ? wheelStep : -wheelStep)));
-          child.write(token.raw);
-          schedule();
-        } else scrollChat(direction, 3);
-        continue;
-      }
-      const childGestureEvent = token.action === 'm' || (token.action === 'M' && (token.code & 32) !== 0);
-      if (childMousePressed && childGestureEvent) {
-        relayMouse(token);
-        continue;
-      }
-      if (scrollbarDragging && token.action === 'M') {
-        const thumb = scrollThumb(terminal.buffer.active, layout.chatRows, alternateScrollOffset);
-        if (thumb) {
-          const target = scrollTarget(token.y - 1, scrollbarDragOffset, thumb, layout.chatRows);
-          if (thumb.mode === 'exact') {
-            terminal.scrollLines(target - terminal.buffer.active.viewportY);
-            schedule();
-          } else setAlternateScrollOffset(target);
-        }
-        continue;
-      }
-      if (token.y <= layout.chatRows && token.x === layout.columns) {
-        if (token.action === 'M' && (token.code & 3) === 0 && (token.code & 32) === 0) {
-          const thumb = scrollThumb(terminal.buffer.active, layout.chatRows, alternateScrollOffset);
-          if (thumb) {
-            const pointerRow = token.y - 1;
-            scrollbarDragging = true;
-            scrollbarDragOffset = pointerRow >= thumb.top && pointerRow < thumb.top + thumb.size
-              ? pointerRow - thumb.top
-              : Math.floor(thumb.size / 2);
-            const target = scrollTarget(pointerRow, scrollbarDragOffset, thumb, layout.chatRows);
-            if (thumb.mode === 'exact') {
-              terminal.scrollLines(target - terminal.buffer.active.viewportY);
-              schedule();
-            } else setAlternateScrollOffset(target);
-          }
-        }
-        continue;
-      }
-      if (token.y > layout.chatRows) continue;
-      const buffer = terminal.buffer.active;
-      if (buffer.type === 'normal' && buffer.viewportY < buffer.baseY) continue;
-      const mouseMode = terminal.modes.mouseTrackingMode;
-      if (!mouseMode || mouseMode === 'none') continue;
-      if ((token.code & 32) !== 0 && mouseMode !== 'drag' && mouseMode !== 'any') continue;
-      relayMouse(token);
     }
     // Escape sola es una tecla válida. Espera brevemente por si viene una
     // secuencia más larga; después, reenvía el prefijo incompleto.
-    if (inputState.pending && !inputState.pasting && !inputState.pending.startsWith('\x1b[<')) {
+    if (inputState.pending && !inputState.pasting) {
       inputFlushTimer = setTimeout(() => {
         const pending = inputState.pending;
         inputState.pending = '';
