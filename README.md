@@ -1,209 +1,144 @@
 # GAONA-HUB · byGaona
 
-[⬇ Descargar para Windows — última versión](https://github.com/planetagaona-stack/GAONA-HUB/releases/latest/download/GAONA-HUB-windows.zip) · [MIT license](LICENSE)
+[Descargar la última versión publicada para Windows](https://github.com/planetagaona-stack/GAONA-HUB/releases/latest/download/GAONA-HUB-windows.zip) · [Licencia MIT](LICENSE)
 
-![GAONA-HUB terminal preview — demo data](docs/preview.svg)
+**Versión del código: 0.7.0.** La descarga publicada puede ser anterior a esta rama.
 
-**Versión principal: 0.6.1.** La descarga de arriba siempre abre el instalador
-de la última versión estable; no necesitas elegir entre releases anteriores.
+Codex oficial arriba y un HUD de métricas en un panel inferior independiente.
+El chat conserva su terminal: el HUB no recibe sus teclas, no captura su mouse
+y no vuelve a dibujar sus mensajes.
 
-## Novedades de la versión 0.6.1
+Referencia visual del HUD, con datos de ejemplo:
 
-La barra indica la posición del historial sin capturar el mouse: Ctrl+clic,
-selección y rueda siguen bajo el control de Windows Terminal. Usa
-`Shift+PageUp` / `Shift+PageDown` para desplazarte. El HUD también actualiza
-MODEL al elegir un modelo anterior y mantiene el encabezado minimalista. La
-animación de compactación conserva sus variantes `--ascii` y `--no-color`.
+![Diseño de las métricas de GAONA-HUB](docs/preview.svg)
 
-## Instalar en tu otro PC
+## Modo nativo
 
-Necesitas Windows Terminal, Node.js 20+ y Codex CLI instalado e iniciado con tu
-cuenta. En **Releases**, descarga el ZIP de Windows, extráelo y ejecuta:
+El launcher abre una **ventana nueva de Windows Terminal**, con los dos paneles
+creados juntos. Cada ejecución usa un nombre único; no divide otra conversación
+si cambias de ventana mientras arranca. El foco inicial queda en Codex.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -IntegrateCodex -GlowCurrentPowerShell
-```
+- Codex hereda directamente la entrada, salida y errores de su panel.
+- Ctrl+clic, selección, pegado, rueda y atajos quedan a cargo de Codex y Windows
+  Terminal, como al ejecutar el CLI oficial.
+- El HUD sólo escribe en su panel inferior. Cerrarlo no termina Codex.
+- Al terminar Codex, el HUD se desconecta y termina. El cierre visual del panel
+  respeta la configuración existente de Windows Terminal.
+- Si Windows Terminal no está disponible, se inicia Codex nativo sin HUD.
 
-Luego abre una terminal nueva y escribe `gaona-hub.cmd`. El HUD usa las sesiones
-locales de ese PC; el repositorio y el instalador no incluyen tus chats ni tus
-credenciales. El código y el diseño se distribuyen bajo licencia MIT.
+El emulador anterior queda únicamente con `--integrated`. Ese modo tiene límites
+de historial y mouse; no ofrece el aislamiento del modo normal.
 
----
+## Instalar
 
-Official Codex CLI chat with a neon HUD **fixed below it in the same terminal**.
-No separate dashboard window and no patched or downgraded Codex binary.
-Independent community project; not affiliated with OpenAI.
-
-## Install
-
-Tested on Windows 11 x64, Node.js 24.19.0 and official Codex CLI 0.159.3.
-Use Windows Terminal. Node.js 20+ and an existing Codex CLI are required.
-Installation downloads dependencies from npm. Windows x64 uses node-pty's
-included native binaries. Other platforms may require native build tools and
-have not been runtime-tested by this release.
-
-Extract the release ZIP:
+Requiere Windows Terminal, Node.js 20+ y Codex CLI instalado con tu cuenta.
+Desde un paquete de esta versión:
 
 ```powershell
-npm.cmd install -g .\gaona-hub-0.6.1.tgz
+npm.cmd install -g .\gaona-hub-0.7.0.tgz
 gaona-hub.cmd
 ```
 
-Or run the installer. Add `-IntegrateCodex` to make the `codex` command use the
-integrated launcher in new PowerShell sessions:
+O utiliza el instalador del ZIP:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -IntegrateCodex
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
-The installer uses your npm prefix and updates your user PATH if needed. Optional
-integration adds a marked function to PowerShell 7 and Windows PowerShell user
-profiles, preserving existing contents and creating backups. It does not replace
-the official executable or change Codex permissions. Open a new terminal to load
-the integration. Administrator access is unnecessary with a user-owned npm
-prefix. Execution-policy bypass applies only to that installer invocation.
+El instalador normal instala el paquete. Las modificaciones adicionales requieren
+opciones explícitas:
 
-## Start or resume
+| Opción | Efecto solicitado |
+| --- | --- |
+| `-IntegrateCodex` | Agrega una función `codex` a perfiles PowerShell, con respaldo. |
+| `-AddToUserPath` | Agrega el prefijo npm al PATH persistente si falta. |
+| `-ConfigureTerminal` | Crea el perfil visual opcional de Windows Terminal. |
+| `-GlowCurrentPowerShell` | Aplica el efecto gráfico a perfiles PowerShell. |
+
+Sin esas opciones, no se escriben perfiles, PATH persistente ni `settings.json`.
+La ejecución normal tampoco los modifica. `ExecutionPolicy Bypass` sólo se
+aplica al proceso del instalador. No requiere administrador con un prefijo npm
+propiedad del usuario.
+
+## Usar
 
 ```text
-gaona-hub                         Codex chat + bottom HUD
-gaona-hub -- resume <session-id>   Resume an existing conversation
-gaona-hub -- resume --last         Open the latest conversation
-gaona-hub --project <path>         Choose the starting directory
-gaona-hub run --plain -- --version Ordinary CLI command without the HUD
-gaona-hub status --json            Local metadata snapshot
-gaona-hub demo --width 200         Explicitly labeled demo design
-gaona-hub watch                    Optional standalone monitor
-gaona-hub doctor                   Diagnostics
+gaona-hub.cmd                          Codex nativo + panel inferior
+gaona-hub.cmd -- resume <id>            Reanudar una conversación
+gaona-hub.cmd -- resume --last          Reanudar la última conversación
+gaona-hub.cmd --project <ruta>          Elegir el directorio inicial
+gaona-hub.cmd --title "Mi tarea"        Etiqueta de la ventana nueva
+gaona-hub.cmd --plain                   Codex directo, sin HUD
+gaona-hub.cmd --integrated              Emulador anterior, compatibilidad
+gaona-hub.cmd watch                     Monitor separado manual
+gaona-hub.cmd status --json             Métricas locales
+gaona-hub.cmd doctor                    Diagnóstico local
 ```
 
-El resto de los argumentos después de `--` se reenvía literalmente a Codex,
-incluidas las opciones de permisos. Los atajos, aprobaciones y autenticación
-siguen a cargo de Codex. La barra del historial es visual: el HUB no activa
-mouse tracking, así Windows Terminal conserva Ctrl+clic, selección y rueda. Usa
-**Shift+PageUp/PageDown** para desplazarte por el chat. Al cambiar el tamaño, el
-HUD se mantiene abajo. Las ventanas pequeñas muestran menos métricas para dejar
-espacio al chat. Usa `--ascii --no-color` para una vista básica.
+Los argumentos posteriores a `--` llegan literalmente a Codex. El directorio,
+argumentos y entorno viajan al nuevo proceso por un canal local; no se guardan
+en archivos temporales ni se imprimen en logs. Las opciones `--ascii`,
+`--no-color` y `--color` afectan el HUD. Codex conserva su propia configuración.
+No se modifica el ejecutable oficial ni sus permisos.
 
-Codex locks conversations open in another interface. Close that session before
-resuming here. The launcher cannot retrofit an already running CLI's screen;
-reopen the conversation ID with the command above.
+## Identidad y métricas
 
-## Automatic updates
+El launcher solicita temporalmente un título de Codex con identificador, modelo,
+razonamiento y estado. Un auxiliar Windows lo lee mediante `GetConsoleTitle`;
+no captura la entrada ni el texto del chat. El título visible queda separado
+de esos metadatos.
 
-The installed HUD checks GitHub's latest stable release once daily when opening
-an interactive Codex session. New versions are downloaded, verified against
-their release SHA-256 sums, and applied before Codex starts. The launcher then
-restarts itself with the same arguments. Existing sessions keep running; your
-chats, settings, title options, profiles and native dependencies are preserved.
-Offline checks fail back to the installed version. Development checkouts and
-noninteractive commands do not auto-update.
+El identificador se resuelve contra archivos locales de la sesión. Los títulos
+truncados sólo se aceptan cuando hay una coincidencia única. **Nunca se elige otra
+conversación por ser la más reciente.** El HUD muestra espera cuando falta la
+identidad o las métricas. Un chat nuevo sin mensajes puede no haber creado su
+archivo de métricas todavía. Mientras tanto, el título permite mostrar modelo,
+razonamiento y estado; al comenzar otro chat se descartan las métricas anteriores.
 
-To update immediately, use `gaona-hub.cmd update`; `update --check` only checks.
-Use `--no-update` for one launch, or set `GAONA_HUB_AUTO_UPDATE=0` to disable
-automatic checks. A release that changes native dependencies requires running
-the Windows installer. Auto-updating starts with 0.5.0; older installations need
-one manual upgrade to receive this feature.
+Contexto, cuota, modelo, estado, proyecto y actividad se muestran según los datos
+disponibles. El modo pasivo no inspecciona los comandos que escribes ni detecta
+visualmente el inicio de una compactación. Esas señales no se inventan; la
+animación basada en la pantalla sólo existe en `--integrated`.
 
-## Integration
+El HUD no requiere una clave API ni envía conversaciones a un servicio. Lee
+archivos locales. El chequeo de actualizaciones consulta GitHub Releases.
 
-Window and tab titles use the saved Codex chat name from the local session index
-and follow renames. Without a saved name they show the project directory; the
-user home directory shows **Nueva tarea** instead of your username.
-You can choose a task name explicitly:
+## Actualizaciones
+
+```text
+gaona-hub.cmd update --check
+gaona-hub.cmd update
+```
+
+Se comprueban nuevas versiones estables como máximo una vez al día, verificando
+SHA-256. `--no-update` omite el chequeo; `GAONA_HUB_AUTO_UPDATE=0` lo desactiva.
+Los checkouts y comandos no interactivos no se actualizan automáticamente.
+Las sesiones abiertas conservan la versión que cargaron.
+
+## Verificar y probar el checkout
 
 ```powershell
-gaona-hub.cmd --title "Actualizar drivers"
+npm.cmd ci
+npm.cmd test
+npm.cmd run pack:check
+node scripts/verify-console-title.js
+node scripts/verify-native-controls.js
+node scripts/verify-passive-terminal.js
+node scripts/preview-native.js
 ```
 
-`--title` changes only the displayed window title, not the saved Codex chat name.
-The HUD does not generate a name by reading your prompts.
+Las pruebas cubren identidad, transporte local, argumentos literales y stdio
+heredado. ConPTY comprueba enlaces OSC8 e inicio, teclado, redimensionado y cierre
+de Codex sin enviar prompts. La prueba del emulador anterior está en
+`scripts/verify-terminal.js`.
 
-Codex runs in a real pseudoterminal above the reserved HUD. An xterm VT emulator
-confines clears, scrolling and alternate screens to that viewport. Keyboard,
-bracketed paste, mouse modes and terminal query replies are forwarded. Only
-changed rows are redrawn.
+`preview-native.js` abre una ventana real del checkout sin instalarlo globalmente.
+Ctrl+clic, selección y rueda se comprueban físicamente en esa ventana; un test de
+metadatos de enlace no equivale a un clic.
 
-Temporary child-process settings request native title fields for session ID,
-model, reasoning and status, and hide the redundant standard status line. The
-OSC title identifies the actual conversation. Shortened IDs are resolved only
-when exactly one local session filename matches, then checked against metadata.
-Unknown or ambiguous IDs stay unavailable; another agent's latest session is
-never adopted. Model and status may appear before token metadata is written.
-These display overrides do not edit `config.toml`.
+## Licencia
 
-The Windows installer creates a **Gaona-HUB** Windows Terminal profile with a
-subtle GPU glow shader. Saturated HUD colors glow near the footer; white chat
-text stays sharp. `-GlowCurrentPowerShell` also applies the shader to your current
-PowerShell profiles. The previous shader settings are retained in one installation
-state file and restored by uninstall. The bundled HLSL needs no compiler to run.
-
-The viewport supports Unicode and terminal colors. Some terminal extensions,
-including inline image protocols and OSC clipboard forwarding, are not
-implemented. Future Codex title/event formats need compatibility verification.
-The optional legacy `run --native --codex <compatible-binary>` mode remains for
-separately supplied binaries supporting command-backed status lines.
-
-## Metrics
-
-- **CTX:** last reported context tokens / model context window.
-- **IN / OUT:** cumulative session counters; not billing estimates.
-- **MODEL:** live model and reasoning; session metadata as a fallback.
-- **GIT:** branch; `*` indicates tracked modifications.
-- **PROJECT:** directory recorded by the bound conversation.
-- **STATUS:** live status; recorded task status as a fallback.
-- **SEMANAL:** remaining percentage in a reported window of at least seven days.
-- **REINICIO:** time remaining until that window resets.
-- **TAREA:** recorded task duration, frozen on completion or interruption.
-
-CTX and weekly quota have separate bars beside each other. The header shows
-native **FAST ON/OFF**, the last typed slash-command name, and the last explicitly
-invoked skill or detected SKILL.md read. CMD records the submitted command name,
-not its arguments; commands selected entirely through menus may not be captured.
-Skill names describe the last observed use, not a guarantee that it is still active.
-
-Unavailable fields show `—`; live mode never substitutes demo values. Archived
-sessions are not monitored. Files are scanned in 256 KiB chunks, then read
-incrementally. Incomplete lines are retried; records larger than 2 MiB are
-skipped. Explicitly selected older sessions can be read outside the thirty most
-recent files. Native status takes precedence over a stale recorded task status.
-
-## Privacy
-
-The emulator holds the Codex screen in memory to display chat, without saving
-or uploading that screen. The metric reader retains structured metadata without
-retaining message bodies or tool arguments. It reads `$CODEX_HOME/sessions`
-(default `~/.codex/sessions`), the bound chat name from `session_index.jsonl`,
-and local Git metadata. The updater contacts GitHub for public release metadata
-and packages; it does not upload chats, paths or credentials. No HUD server, telemetry,
-network listener or API-key reader is used. Codex keeps its normal connection.
-JSON snapshots contain local paths, session IDs and saved chat names; review before sharing.
-
-## Develop and share
-
-```sh
-npm ci
-npm test
-npm run pack:check
-npm run release
-```
-
-The release script produces an npm archive, checksums and a versioned release
-folder under `dist/`. Zip that folder for sharing. MIT source; dependency licenses
-are in `THIRD-PARTY-NOTICES.txt`. Downloads are distributed through GitHub
-Releases. This package is not published to the npm registry; registry publication
-requires an available name/scope and the publisher's account.
-
-`scripts/verify-terminal.js <cli-path> <source-session-id> <directory>` performs
-the Windows ConPTY smoke test in a temporary fork, without submitting a prompt.
-
-## Uninstall
-
-If you enabled profile integration, remove it and the package using:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Uninstall
-```
-
-Otherwise run `npm.cmd uninstall -g gaona-hub`. Reopen PowerShell.
-Official Codex, permissions and conversations are kept.
+Proyecto independiente de la comunidad, sin afiliación con OpenAI. Licencia MIT.
+Atribuciones en [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). El modo de dos
+paneles está orientado a Windows Terminal. Otros sistemas conservan Codex directo;
+el emulador anterior sigue disponible explícitamente.

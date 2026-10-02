@@ -1,6 +1,6 @@
 {
   "name": "gaona-hub",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "GAONA-HUB byGaona: a neon HUD fixed below your official Codex CLI chat.",
   "author": "byGaona",
   "repository": {
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "start": "node bin/codex-hub.js",
-    "test": "node --test test/hub.test.js test/terminal.test.js test/update.test.js",
+    "test": "node --test test/hub.test.js test/terminal.test.js test/update.test.js test/native-controls.test.js test/passive-panel.test.js",
     "pack:check": "npm pack --dry-run",
     "release": "node scripts/release.js"
   },
