@@ -6,7 +6,8 @@ Hacer que la posición y el desplazamiento del historial de Codex se puedan
 controlar con una barra visible dentro del chat integrado de GAONA-HUB.
 El alcance se limita a la navegación del chat y al ajuste minimalista pedido
 para el encabezado; el resto del HUD y de los controles conserva su
-comportamiento actual.
+comportamiento actual. También se actualizará el indicador `MODEL` cuando el
+selector de Codex muestre un modelo actual distinto al último registrado.
 
 ## Dirección visual
 
@@ -30,6 +31,9 @@ líneas que sí separen secciones.
   eventos del footer seguirán perteneciendo al HUD.
 - La barra tendrá un gutter propio de una columna para no tapar texto del chat;
   el PTY de Codex y el renderer se ajustarán juntos al ancho disponible.
+- Si el selector de modelos está visible, el modelo marcado `(current)` será la
+  fuente viva de `MODEL`; el valor se conserva en memoria al cerrar el selector
+  para evitar que el último `turn_context` reemplace la selección actual.
 
 ## Arquitectura y estados límite
 
@@ -43,14 +47,22 @@ El buffer alternativo no tiene scrollback y no mostrará un deslizador falso.
 Si no hay historial adicional, tampoco se dibuja la pista. El redimensionado
 mantendrá sincronizados el emulador, el PTY y el gutter.
 
+El lector del selector inspeccionará solo las filas visibles del buffer activo
+y retendrá únicamente el identificador del modelo marcado `(current)`. No
+guardará texto del chat ni otras líneas del selector.
+
 La barra nativa de Windows Terminal pertenece al buffer externo de la ventana.
 La navegación funcional se implementará dentro del viewport del HUB, que es
 donde vive el historial del chat. El renderer del encabezado dejará de añadir
 una regla decorativa de relleno y conservará solo las líneas separadoras.
+La lectura de `(current)` complementará el título y el registro de sesión, que
+pueden seguir mostrando el modelo del turno anterior tras cambiar la selección.
 
 ## Revisión y validación
 
 Revisar que el deslizador coincida con los extremos y posiciones intermedias del
 historial, que el arrastre no consuma eventos del resto del chat, y que el
-gutter se mantenga alineado al cambiar el tamaño de la terminal. La revisión de
-código y los checks del PR cubrirán el cambio antes de cualquier integración.
+gutter se mantenga alineado al cambiar el tamaño de la terminal. Revisar también
+que `MODEL` cambie al modelo marcado `(current)` y que se mantenga correcto al
+cerrar el selector y refrescar los datos de sesión. La revisión de código y los
+checks del PR cubrirán el cambio antes de cualquier integración.

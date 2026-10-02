@@ -13,8 +13,8 @@
 ## Mapa de archivos
 
 - Crear `src/scrollbar.js`: geometría del thumb, conversión de la fila del puntero a `viewportY` y glifos de la pista.
-- Modificar `src/terminal-view.js`: reservar el gutter de una celda, componerlo junto al frame del chat y quitar la regla que rellena el encabezado después del título, conservando las reglas separadoras.
-- Modificar `src/terminal.js`: sincronizar ancho del PTY, preservar coordenadas SGR y controlar clic/arrastre sin alterar rueda ni atajos existentes.
+- Modificar `src/terminal-view.js`: reservar el gutter de una celda, componerlo junto al frame del chat, quitar la regla que rellena el encabezado después del título y leer el modelo marcado como actual en el buffer visible.
+- Modificar `src/terminal.js`: sincronizar ancho del PTY, preservar coordenadas SGR, controlar clic/arrastre y aplicar el modelo actual leído del selector sin alterar rueda ni atajos existentes.
 - La revisión se limita a esos tres archivos. No se cambian el HUD, sus métricas, el estilo de compactación ni los perfiles de Windows Terminal.
 
 ## Tarea 1: geometría y representación de la barra
@@ -43,6 +43,21 @@ const heading = options.color === false
 ```
 
 - [ ] Conservar cualquier línea que se use para separar secciones; no reemplazar el relleno eliminado con otro adorno.
+- [ ] Crear `modelFromPicker(terminal)`. Revisar `translateToString(true)` de las filas visibles del buffer activo y extraer solo un identificador de modelo en una opción terminada en `(current)`, con o sin el prefijo `>` de selección. Devolver `null` si no hay un único marcador válido.
+
+```js
+export function modelFromPicker(terminal) {
+  const buffer = terminal.buffer.active;
+  const candidates = new Set();
+  for (let row = 0; row < terminal.rows; row++) {
+    const line = buffer.getLine(buffer.viewportY + row)?.translateToString(true) || '';
+    const match = /^\s*>?\s*\d+\.\s+([a-z0-9][a-z0-9._:/-]*)\s+\(current\)(?:\s|$)/i.exec(line);
+    if (match) candidates.add(match[1]);
+  }
+  return candidates.size === 1 ? candidates.values().next().value : null;
+}
+```
+
 - [ ] En `drawFrame`, añadir una celda de `scrollbarRows` a cada fila de `bufferRows`. Mantener las filas de footer a ancho completo y limitar el cursor del chat a `chatColumns`.
 
 ## Tarea 2: interacción y redimensionado
@@ -58,6 +73,8 @@ tokens.push({
   x: Number(mouse[2]), y: Number(mouse[3]), action: mouse[4]
 });
 ```
+
+- [ ] En el callback de `terminal.write` de `child.onData`, llamar `modelFromPicker(terminal)`. Si devuelve un modelo, asignarlo a `runtimeSignals.model` y `state.model` antes de programar el frame. Conservarlo en memoria cuando el selector se cierre para que `refresh()` no lo reemplace por un `turn_context` antiguo.
 
 - [ ] Solicitar tracking SGR de arrastre (`1002`) al terminal exterior. Al reenviar reportes al hijo, mantener la condición existente basada en `terminal.modes.mouseTrackingMode`; así los eventos añadidos por el HUB fuera del gutter no llegan a Codex si este no pidió tracking.
 - [ ] Mantener `scrollbarDragging` y `scrollbarDragOffset`. Un press izquierdo (`action === 'M'`, botón izquierdo en `code`) en la última columna del terminal y dentro de `chatRows` inicia el arrastre. Si el press cae fuera del thumb, centrar el thumb en esa fila y saltar al destino.
@@ -78,6 +95,7 @@ tokens.push({
 ## Autorrevisión contra el diseño aprobado
 
 - Dirección visual: cian/gris discreto, un solo gutter, sin animación; `--ascii` y `--no-color` considerados.
+- Modelo: leer exclusivamente la opción `(current)`, ignorar otras opciones resaltadas y mantener el modelo leído al cerrar el selector.
 - Comportamiento: posición proporcional, clic y arrastre, sin retirar rueda ni atajos existentes.
-- Aislamiento: solo renderer, controlador del terminal y módulo nuevo de geometría; las métricas del HUD, compactación y perfil externo quedan fuera del cambio. El título del HUD deja de tener regla de relleno, manteniendo los separadores existentes.
+- Aislamiento: solo renderer, controlador del terminal y módulo nuevo de geometría; las demás métricas del HUD, compactación y perfil externo quedan fuera del cambio. El título del HUD deja de tener regla de relleno, manteniendo los separadores existentes.
 - Estados límite: buffer alternativo, historial vacío, thumb que ocupa toda la pista, release fuera del chat y redimensionado están cubiertos.
