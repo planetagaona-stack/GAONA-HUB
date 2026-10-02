@@ -18,11 +18,101 @@ export function projectWindowTitle(state, cwd, { title, home = os.homedir() } = 
   return clean(state.project || path.win32.basename(directory.replace(/[\\/]+$/, '')) || directory) || 'Codex';
 }
 
+const pasteStart = '\x1b[200~';
+const pasteEnd = '\x1b[201~';
+const shiftPageUp = '\x1b[5;2~';
+const shiftPageDown = '\x1b[6;2~';
+
+function suffixPrefixLength(value, markers) {
+  for (let size = Math.min(value.length, Math.max(...markers.map(marker => marker.length))); size > 0; size--) {
+    const suffix = value.slice(-size);
+    if (markers.some(marker => marker.startsWith(suffix))) return size;
+  }
+  return 0;
+}
+
+// Conserva los reportes SGR entre fragmentos y no interpreta escapes dentro
+// del contenido de un pegado entre corchetes.
+function inputTokens(chunk, state) {
+  const source = state.pending + chunk;
+  const tokens = [];
+  let text = '';
+  let index = 0;
+  state.pending = '';
+  const flushText = () => {
+    if (text) tokens.push({ type: 'text', value: text });
+    text = '';
+  };
+
+  while (index < source.length) {
+    if (state.pasting) {
+      const end = source.indexOf(pasteEnd, index);
+      if (end < 0) {
+        const remainder = source.slice(index);
+        const keep = suffixPrefixLength(remainder, [pasteEnd]);
+        text += remainder.slice(0, remainder.length - keep);
+        state.pending = remainder.slice(remainder.length - keep);
+        break;
+      }
+      text += source.slice(index, end + pasteEnd.length);
+      index = end + pasteEnd.length;
+      state.pasting = false;
+      continue;
+    }
+
+    const markers = [pasteStart, shiftPageUp, shiftPageDown, '\x1b[<'];
+    let next = -1, marker = '';
+    for (const candidate of markers) {
+      const at = source.indexOf(candidate, index);
+      if (at >= 0 && (next < 0 || at < next)) { next = at; marker = candidate; }
+    }
+    if (next < 0) {
+      const remainder = source.slice(index);
+      const keep = suffixPrefixLength(remainder, markers);
+      text += remainder.slice(0, remainder.length - keep);
+      state.pending = remainder.slice(remainder.length - keep);
+      break;
+    }
+    text += source.slice(index, next);
+    if (marker === pasteStart) {
+      text += pasteStart;
+      state.pasting = true;
+      index = next + pasteStart.length;
+      continue;
+    }
+    if (marker === shiftPageUp || marker === shiftPageDown) {
+      flushText();
+      tokens.push({ type: 'key', direction: marker === shiftPageUp ? -1 : 1 });
+      index = next + marker.length;
+      continue;
+    }
+
+    const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(source.slice(next));
+    if (mouse) {
+      flushText();
+      tokens.push({ type: 'mouse', raw: mouse[0], code: Number(mouse[1]), y: Number(mouse[3]) });
+      index = next + mouse[0].length;
+      continue;
+    }
+    const remainder = source.slice(next);
+    if (remainder.length <= 64 && /^\x1b\[<(?:\d+(?:;\d*(?:;\d*)?)?)?$/.test(remainder)) {
+      flushText();
+      state.pending = remainder;
+      break;
+    }
+    text += '\x1b[<';
+    index = next + 3;
+  }
+  flushText();
+  return tokens;
+}
+
 export async function integratedTerminal(store, options, args) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('El chat integrado requiere una terminal interactiva. Usa run --plain para comandos sin terminal.');
   const cwd = options.project || process.cwd();
   let state = toSnapshot({ cwd }), selected = null, announced = null, layout, frame = [], stopped = false;
-  let painting = null, refreshing = false, timer, child, active = false;
+  let painting = null, refreshing = false, timer, inputFlushTimer, child, active = false;
+  const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
   let windowTitle = null;
   const updateTitle = () => {
@@ -52,8 +142,10 @@ export async function integratedTerminal(store, options, args) {
       if (modes.applicationCursorKeysMode) output += '\x1b[?1h';
       if (modes.bracketedPasteMode) output += '\x1b[?2004h';
       if (modes.sendFocusMode) output += '\x1b[?1004h';
-      const mouse = { vt200: 1000, drag: 1002, any: 1003 }[modes.mouseTrackingMode];
-      if (mouse) output += `\x1b[?${mouse}h\x1b[?1006h`;
+      // Captura la rueda en el HUB aunque Codex no solicite tracking; si no,
+      // Windows Terminal puede convertirla en flechas.
+      const mouse = { x10: 1000, vt200: 1000, drag: 1002, any: 1003 }[modes.mouseTrackingMode] || 1000;
+      output += `\x1b[?${mouse}h\x1b[?1006h`;
     }
     const result = drawFrame(terminal, layout, frame);
     frame = result.lines;
@@ -87,15 +179,16 @@ export async function integratedTerminal(store, options, args) {
       schedule();
     } finally { refreshing = false; }
   };
-  const input = data => {
-    const value = data.toString('utf8');
-    if (value === '\x1b[5;2~' || value === '\x1b[6;2~') {
-      terminal.scrollLines(value.includes('5;') ? -layout.chatRows : layout.chatRows);
-      schedule();
+  const scrollChat = (direction, lines = layout.chatRows) => {
+    if (terminal.buffer.active.type === 'alternate') {
+      child.write(direction < 0 ? '\x1b[5~' : '\x1b[6~');
       return;
     }
-    // Mouse events in the reserved footer must not reach the chat.
-    if (/^\x1b\[<\d+;\d+;\d+[Mm]$/.test(value) && Number(value.match(/;(\d+)[Mm]$/)[1]) > layout.chatRows) return;
+    terminal.scrollLines(direction * lines);
+    schedule();
+  };
+  const forward = value => {
+    if (!value) return;
     terminal.scrollToBottom();
     const submitted = commands.accept(value);
     if (submitted?.kind === 'command') runtimeSignals.lastCommand = submitted.name;
@@ -103,11 +196,49 @@ export async function integratedTerminal(store, options, args) {
     if (submitted) { state = { ...state, ...runtimeSignals }; schedule(); }
     child.write(value);
   };
+  const input = data => {
+    clearTimeout(inputFlushTimer);
+    for (const token of inputTokens(data.toString('utf8'), inputState)) {
+      if (token.type === 'text') {
+        forward(token.value);
+        continue;
+      }
+      if (token.type === 'key') {
+        scrollChat(token.direction);
+        continue;
+      }
+      // Los eventos del pie pertenecen al HUD. La rueda vertical desplaza la
+      // conversación en vez de llegar al editor como historial de flechas.
+      if (token.y > layout.chatRows) continue;
+      const verticalWheel = (token.code & 64) !== 0 && (token.code & 2) === 0;
+      if (verticalWheel) {
+        const direction = (token.code & 1) === 0 ? -1 : 1;
+        const buffer = terminal.buffer.active;
+        const childTracksMouse = terminal.modes.mouseTrackingMode && terminal.modes.mouseTrackingMode !== 'none';
+        if (buffer.type === 'alternate' && childTracksMouse) child.write(token.raw);
+        else scrollChat(direction, 3);
+        continue;
+      }
+      const buffer = terminal.buffer.active;
+      if (buffer.type === 'normal' && buffer.viewportY < buffer.baseY) continue;
+      if (!terminal.modes.mouseTrackingMode || terminal.modes.mouseTrackingMode === 'none') continue;
+      child.write(token.raw);
+    }
+    // Escape sola es una tecla válida. Espera brevemente por si viene una
+    // secuencia más larga; después, reenvía el prefijo incompleto.
+    if (inputState.pending && !inputState.pasting && !inputState.pending.startsWith('\x1b[<')) {
+      inputFlushTimer = setTimeout(() => {
+        const pending = inputState.pending;
+        inputState.pending = '';
+        if (!inputState.pasting) forward(pending);
+      }, 50);
+    }
+  };
   const resize = () => { frame = []; void refresh(); };
   const cleanup = () => {
     if (stopped) return;
     stopped = true;
-    clearInterval(timer); clearTimeout(painting);
+    clearInterval(timer); clearTimeout(painting); clearTimeout(inputFlushTimer);
     process.stdin.off('data', input); process.stdout.off('resize', resize);
     if (active) {
       process.stdin.setRawMode(oldRaw); process.stdin.pause();

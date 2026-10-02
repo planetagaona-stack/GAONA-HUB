@@ -69,11 +69,15 @@ gaona-hub watch                    Optional standalone monitor
 gaona-hub doctor                   Diagnostics
 ```
 
-Everything after `--` is forwarded literally to Codex, including your chosen
-permission flags. Normal keyboard shortcuts, approvals and authentication belong
-to Codex. **Shift+PageUp/PageDown** scrolls local terminal history. Resizing keeps
-the HUD at the bottom. Small windows show fewer metrics to leave room for chat.
-Use `--ascii --no-color` for a basic display.
+El resto de los argumentos después de `--` se reenvía literalmente a Codex,
+incluidas las opciones de permisos. Los atajos, aprobaciones y autenticación
+siguen a cargo de Codex. La rueda del mouse y **Shift+PageUp/PageDown** recorren
+la conversación sin activar el historial del editor. En pantalla alternativa,
+GAONA-HUB conserva los eventos de mouse que Codex solicita; si Codex no captura
+el mouse, la rueda se traduce a PageUp/PageDown. En el buffer normal desplaza el
+historial local. Para seleccionar texto, mantén Shift y arrastra. Al cambiar el
+tamaño, el HUD se mantiene abajo. Las ventanas pequeñas muestran menos métricas
+para dejar espacio al chat. Usa `--ascii --no-color` para una vista básica.
 
 Codex locks conversations open in another interface. Close that session before
 resuming here. The launcher cannot retrofit an already running CLI's screen;
