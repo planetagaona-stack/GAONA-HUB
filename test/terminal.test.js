@@ -132,34 +132,34 @@ test('compaction refreshes the footer on every frame and clears its state when C
 });
 
 test('compaction resizes the PTY and resets the frame when the HUD grows', t => {
-  const terminal = emulator(t, 49, 30);
+  const terminal = emulator(t, 48, 30);
   const sizes = [];
   const child = { resize: (columns, rows) => sizes.push([columns, rows]) };
   const state = { ...demoSnapshot, compacting: false };
   const initial = layoutScreen(49, 30, state, { color: true });
   const started = applyCompactionView(terminal, child, ['old frame'], initial, state, {}, true, 0, { color: true });
   assert.equal(terminal.rows, started.layout.chatRows);
-  assert.deepEqual(sizes.at(-1), [49, started.layout.chatRows]);
+  assert.deepEqual(sizes.at(-1), [started.layout.chatColumns, started.layout.chatRows]);
   assert.deepEqual(started.frame, []);
   assert.equal(drawFrame(terminal, started.layout).lines.length, 30);
 
   const finished = applyCompactionView(terminal, child, started.frame, started.layout, started.state, started.runtimeSignals, false, 0, { color: true });
   assert.equal(terminal.rows, finished.layout.chatRows);
-  assert.deepEqual(sizes.at(-1), [49, finished.layout.chatRows]);
+  assert.deepEqual(sizes.at(-1), [finished.layout.chatColumns, finished.layout.chatRows]);
   assert.deepEqual(finished.frame, []);
   assert.doesNotMatch(finished.layout.footer.join('\n'), /COMPACTANDO/);
   assert.equal(drawFrame(terminal, finished.layout).lines.length, 30);
 });
 
-test('HUD heading replaces the decorative slash rail with a thin rule', () => {
+test('HUD heading omits the decorative filler rail', () => {
   const layout = layoutScreen(120, 24, demoSnapshot, { color: false });
   assert.ok(!layout.footer.join('\n').includes('////'));
-  assert.ok(layout.footer[0].includes('─'));
+  assert.ok(!layout.footer[0].includes('─'));
 });
 
 test('Codex clear-screen and alternate-buffer output cannot overwrite the reserved HUD', async t => {
   const layout = layoutScreen(80, 24, demoSnapshot, { color: true });
-  const inner = emulator(t, 80, layout.chatRows), outer = emulator(t);
+  const inner = emulator(t, layout.chatColumns, layout.chatRows), outer = emulator(t);
   await write(inner, '\x1b[?1049h\x1b[2J\x1b[HCHAT\x1b[38;2;73;208;255m cyan\x1b[0m');
   const first = drawFrame(inner, layout);
   await write(outer, first.text);
