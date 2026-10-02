@@ -4,8 +4,9 @@
 
 Hacer que la posición y el desplazamiento del historial de Codex se puedan
 controlar con una barra visible dentro del chat integrado de GAONA-HUB.
-El alcance se limita a la navegación del chat; el HUD y el resto de los
-controles conservan su comportamiento actual.
+El alcance se limita a la navegación del chat y al ajuste minimalista pedido
+para el encabezado; el resto del HUD y de los controles conserva su
+comportamiento actual.
 
 ## Dirección visual
 
@@ -14,7 +15,9 @@ pista usará un tono gris azulado de bajo contraste y el deslizador un cian del
 sistema visual actual. No tendrá animación ni etiquetas permanentes. El gutter
 mantendrá un ancho estable de una columna; la barra se ocultará cuando no exista
 historial desplazable o Codex esté en su buffer alternativo. `--ascii` y
-`--no-color` conservarán sus variantes legibles.
+`--no-color` conservarán sus variantes legibles. En el encabezado del HUD se
+eliminará la regla que rellena el espacio después del título y se mantendrán las
+líneas que sí separen secciones.
 
 ## Comportamiento
 
@@ -42,7 +45,8 @@ mantendrá sincronizados el emulador, el PTY y el gutter.
 
 La barra nativa de Windows Terminal pertenece al buffer externo de la ventana.
 La navegación funcional se implementará dentro del viewport del HUB, que es
-donde vive el historial del chat.
+donde vive el historial del chat. El renderer del encabezado dejará de añadir
+una regla decorativa de relleno y conservará solo las líneas separadoras.
 
 ## Revisión y validación
 
