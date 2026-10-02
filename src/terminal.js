@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CommandTracker } from './command-tracker.js';
 import { resolveCodex } from './launch.js';
-import { layoutScreen, drawFrame, titleSignals, isCompacting } from './terminal-view.js';
+import { layoutScreen, drawFrame, titleSignals, modelPickerState, isCompacting } from './terminal-view.js';
 import { toSnapshot } from './signals.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
@@ -135,6 +135,7 @@ export async function integratedTerminal(store, options, args) {
   let painting = null, refreshing = false, timer, compactionTimer, inputFlushTimer, child, active = false;
   const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
+  let selectedModel = null;
   let windowTitle = null;
   const updateTitle = () => {
     const label = projectWindowTitle(state, cwd, options);
@@ -173,6 +174,13 @@ export async function integratedTerminal(store, options, args) {
     process.stdout.write(output + result.text);
   };
   const schedule = () => { if (!painting && !stopped) painting = setTimeout(paint, 25); };
+  const setSelectedModel = model => {
+    if (!model) return;
+    selectedModel = model;
+    runtimeSignals = { ...runtimeSignals, model };
+    state = { ...state, model };
+    schedule();
+  };
   const syncCompaction = () => {
     const compacting = isCompacting(terminal);
     if (compacting === Boolean(runtimeSignals.compacting)) return;
@@ -211,7 +219,9 @@ export async function integratedTerminal(store, options, args) {
       // Unbound means unknown. Never borrow another active agent's session.
       if (id) {
         const snapshot = await store.snapshot(id);
-        if (selected === id && !snapshot.error) state = { ...snapshot, ...runtimeSignals };
+        if (selected === id && !snapshot.error) {
+          state = { ...snapshot, ...runtimeSignals, ...(selectedModel ? { model: selectedModel } : {}) };
+        }
       }
       const current = dimensions();
       const next = layoutScreen(current.cols, current.rows, state, options);
@@ -235,6 +245,7 @@ export async function integratedTerminal(store, options, args) {
   };
   const forward = value => {
     if (!value) return;
+    if (value.includes('\r')) setSelectedModel(modelPickerState(terminal)?.active);
     terminal.scrollToBottom();
     const submitted = commands.accept(value);
     if (submitted?.kind === 'command') runtimeSignals.lastCommand = submitted.name;
@@ -304,18 +315,28 @@ export async function integratedTerminal(store, options, args) {
     terminal.onData(data => child.write(data)); // DSR and device attribute replies.
     terminal.onTitleChange(title => {
       const parsed = titleSignals(title), id = parsed?.prefix;
-      if (parsed) runtimeSignals = { ...runtimeSignals, ...parsed.signals };
       if (id && id !== announced) {
         announced = id;
         selected = null;
+        selectedModel = null;
+        delete runtimeSignals.model;
         state = { ...toSnapshot({ id, cwd, status: 'connecting' }), connected: true };
         store.refreshed = 0;
         void refresh();
       }
-      if (parsed) { state = { ...state, ...runtimeSignals }; void refresh(); }
+      if (parsed) {
+        runtimeSignals = { ...runtimeSignals, ...parsed.signals };
+        state = { ...state, ...runtimeSignals, ...(selectedModel ? { model: selectedModel } : {}) };
+        void refresh();
+      }
       updateTitle();
     });
-    child.onData(data => terminal.write(data, () => { syncCompaction(); schedule(); }));
+    child.onData(data => terminal.write(data, () => {
+      const picker = modelPickerState(terminal);
+      if (picker) setSelectedModel(picker.current);
+      syncCompaction();
+      schedule();
+    }));
     timer = setInterval(() => void refresh(), 1000);
     paint();
     return await new Promise(resolve => child.onExit(event => { cleanup(); resolve(event.exitCode); }));

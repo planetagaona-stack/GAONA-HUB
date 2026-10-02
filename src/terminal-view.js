@@ -1,4 +1,4 @@
-import { renderHud, clip, visibleLength, safeText } from './render.js';
+import { renderHud, clip, safeText } from './render.js';
 
 export function sessionFromTitle(title) {
   title = title.split(' | ')[0];
@@ -21,12 +21,24 @@ export function titleSignals(title) {
   return { prefix, signals };
 }
 
+export function modelPickerState(terminal) {
+  const buffer = terminal.buffer.active;
+  let current = null, active = null, currentCount = 0, activeCount = 0;
+  for (let row = 0; row < terminal.rows; row++) {
+    const line = buffer.getLine(buffer.viewportY + row)?.translateToString(true) || '';
+    const match = /^\s*([>›❯])?\s*\d+\.\s+([a-z0-9][a-z0-9._:/-]*)(?:\s+\((current)\))?(?:\s+.*)?$/i.exec(line);
+    if (!match) continue;
+    if (match[3]) { current = match[2]; currentCount++; }
+    if (match[1]) { active = match[2]; activeCount++; }
+  }
+  return currentCount === 1 && activeCount === 1 ? { current, active } : null;
+}
+
 export function layoutScreen(columns, rows, state = {}, options = {}) {
   const width = Math.max(20, Math.min(240, columns));
   const indicators = [state.fastMode == null ? null : `FAST ${state.fastMode ? 'ON' : 'OFF'}`, state.lastCommand ? `CMD ${safeText(state.lastCommand)}` : null, state.skill ? `SKILL ${safeText(state.skill)}` : null].filter(Boolean);
   const title = clip(`>_ GAONA-HUB byGaona  ·  ${indicators.length ? indicators.join(' · ') : 'sesión actual'}`, width - 1, options.ascii);
-  const rule = (options.ascii ? '-' : '─').repeat(Math.max(0, width - 1 - visibleLength(title) - 1));
-  const heading = options.color === false ? title + (rule ? ' ' + rule : '') : `\x1b[1;38;2;73;208;255m${title}\x1b[0m${rule ? ` \x1b[38;2;44;76;96m${rule}\x1b[0m` : ''}`;
+  const heading = options.color === false ? title : `\x1b[1;38;2;73;208;255m${title}\x1b[0m`;
   const metrics = columns < 40 ? [] : renderHud(state, { ...options, width, footer: true }).split('\n');
   const available = Math.max(0, rows - 8);
   const footer = [heading, ...metrics].slice(0, available);
