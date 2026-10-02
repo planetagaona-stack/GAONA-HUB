@@ -101,6 +101,18 @@ test('compaction detection finds the live status across the viewport and rejects
   assert.equal(terminalView.isCompacting(terminal), false);
 });
 
+test('compaction detection ignores historical status while the viewport is scrolled up', async t => {
+  const terminal = emulator(t, 80, 12);
+  await write(terminal, '• Compacting context (0:02 • esc to interrupt)\r\n  └ Making room to continue.\r\n\r\n\r\n› Ask Codex to do anything\r\n');
+  for (let row = 0; row < 20; row++) await write(terminal, `línea normal ${row}\r\n`);
+  assert.ok(terminal.buffer.active.baseY > 0);
+  assert.equal(terminalView.isCompacting(terminal), false);
+
+  terminal.scrollToTop();
+  assert.ok(terminal.buffer.active.viewportY < terminal.buffer.active.baseY);
+  assert.equal(terminalView.isCompacting(terminal), false);
+});
+
 test('compaction refreshes the footer on every frame and clears its state when Codex finishes', t => {
   const terminal = emulator(t, 120, 30);
   const child = { resize() {} };

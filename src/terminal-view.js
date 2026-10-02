@@ -83,7 +83,8 @@ export function footerSession(terminal) {
 
 export function isCompacting(terminal) {
   const buffer = terminal.buffer.active;
-  const start = buffer.viewportY ?? buffer.baseY;
+  const start = buffer.baseY;
+  if (buffer.viewportY < start) return false;
   const end = Math.min(buffer.length, start + terminal.rows);
   const textAt = row => buffer.getLine(row)?.translateToString(true) || '';
   for (let row = start; row + 1 < end; row++) {
