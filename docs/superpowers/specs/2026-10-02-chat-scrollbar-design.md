@@ -14,16 +14,21 @@ selector de Codex muestre un modelo actual distinto al último registrado.
 La barra será una columna delgada y discreta en el borde derecho del chat. La
 pista usará un tono gris azulado de bajo contraste y el deslizador un cian del
 sistema visual actual. No tendrá animación ni etiquetas permanentes. El gutter
-mantendrá un ancho estable de una columna; la barra se ocultará cuando no exista
-historial desplazable o Codex esté en su buffer alternativo. `--ascii` y
+mantendrá un ancho estable de una columna. La posición será proporcional cuando
+xterm tenga scrollback propio; en el buffer alternativo fullscreen de Codex se
+mostrará una posición estimada, porque el HUB no puede leer el porcentaje real.
+`--ascii` y
 `--no-color` conservarán sus variantes legibles. En el encabezado del HUD se
 eliminará la regla que rellena el espacio después del título y se mantendrán las
 líneas que sí separen secciones.
 
 ## Comportamiento
 
-- El largo y la posición del deslizador representarán proporcionalmente el
-  historial retenido por el emulador xterm.
+- En el buffer normal, el largo y la posición del deslizador representarán
+  proporcionalmente el historial retenido por el emulador xterm.
+- En el buffer alternativo, la posición se estimará a partir de la rueda, los
+  atajos de página y los movimientos del deslizador; puede desviarse si Codex
+  desplaza el chat por otro mecanismo.
 - Arrastrar el deslizador moverá el viewport del chat. Hacer clic en la pista
   saltará hacia esa zona del historial.
 - La rueda del mouse y `Shift+PageUp` / `Shift+PageDown` seguirán funcionando.
@@ -45,9 +50,11 @@ mouse conservará columna, fila y tipo de evento para identificar clic, arrastre
 y liberación. Durante el arrastre, la posición del puntero se convertirá en una
 posición de viewport acotada al historial disponible.
 
-El buffer alternativo no tiene scrollback y no mostrará un deslizador falso.
-Si no hay historial adicional, tampoco se dibuja la pista. El redimensionado
-mantendrá sincronizados el emulador, el PTY y el gutter.
+El buffer alternativo no expone su scrollback. Ahí la barra representará hasta
+120 avances de página estimados y convertirá el clic/arrastre en `PageUp` o
+`PageDown`. No afirmará una proporción exacta. En el buffer normal sin historial
+adicional, el gutter quedará vacío. El redimensionado mantendrá sincronizados el
+emulador, el PTY y el gutter.
 
 El lector del selector inspeccionará solo las filas visibles del buffer activo
 y retendrá únicamente los identificadores del modelo actual y de la opción
@@ -62,10 +69,11 @@ pueden seguir mostrando el modelo del turno anterior tras cambiar la selección.
 
 ## Revisión y validación
 
-Revisar que el deslizador coincida con los extremos y posiciones intermedias del
-historial, que el arrastre no consuma eventos del resto del chat, y que el
-gutter se mantenga alineado al cambiar el tamaño de la terminal. Revisar también
-que `MODEL` refleje `(current)`, cambie al confirmar otra opción y se mantenga
+Revisar que el deslizador normal coincida con los extremos y posiciones
+intermedias del historial, que el estimador del buffer alternativo siga los
+eventos que controla el HUB, que el arrastre no consuma eventos del resto del
+chat, y que el gutter se mantenga alineado al cambiar el tamaño de la terminal.
+Revisar también que `MODEL` refleje `(current)`, cambie al confirmar otra opción y se mantenga
 correcto al cerrar el selector y refrescar los datos de sesión. La revisión de
 código y los
 checks del PR cubrirán el cambio antes de cualquier integración.

@@ -1,4 +1,5 @@
 import { renderHud, clip, safeText } from './render.js';
+import { scrollbarRows } from './scrollbar.js';
 
 export function sessionFromTitle(title) {
   title = title.split(' | ')[0];
@@ -42,7 +43,7 @@ export function layoutScreen(columns, rows, state = {}, options = {}) {
   const metrics = columns < 40 ? [] : renderHud(state, { ...options, width, footer: true }).split('\n');
   const available = Math.max(0, rows - 8);
   const footer = [heading, ...metrics].slice(0, available);
-  return { columns, rows, chatRows: Math.max(1, rows - footer.length), footer };
+  return { columns, chatColumns: Math.max(1, columns - 1), rows, chatRows: Math.max(1, rows - footer.length), footer };
 }
 
 export function cellStyle(cell) {
@@ -111,14 +112,15 @@ export function isCompacting(terminal) {
   return false;
 }
 
-export function drawFrame(terminal, layout, previous = []) {
-  const lines = [...bufferRows(terminal), ...layout.footer];
+export function drawFrame(terminal, layout, previous = [], approximateOffset = 0, options = {}) {
+  const gutter = scrollbarRows(terminal, options, approximateOffset);
+  const lines = [...bufferRows(terminal).map((line, row) => `${line}${gutter[row]}`), ...layout.footer];
   let text = '\x1b[?2026h\x1b[?25l';
   for (let row = 0; row < lines.length; row++) {
     if (lines[row] !== previous[row]) text += `\x1b[${row + 1};1H\x1b[0m\x1b[2K${lines[row]}`;
   }
   const cursorRow = Math.min(layout.chatRows, terminal.buffer.active.cursorY + 1);
-  const cursorColumn = Math.min(layout.columns, terminal.buffer.active.cursorX + 1);
+  const cursorColumn = Math.min(layout.chatColumns, terminal.buffer.active.cursorX + 1);
   text += `\x1b[0m\x1b[${cursorRow};${cursorColumn}H\x1b[?25h\x1b[?2026l`;
   return { text, lines };
 }

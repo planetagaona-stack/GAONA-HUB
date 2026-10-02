@@ -6,6 +6,7 @@ import { CommandTracker } from './command-tracker.js';
 import { resolveCodex } from './launch.js';
 import { layoutScreen, drawFrame, titleSignals, modelPickerState, isCompacting } from './terminal-view.js';
 import { toSnapshot } from './signals.js';
+import { alternateScrollRange, scrollTarget, scrollThumb } from './scrollbar.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
 // viewport. The outer terminal owns the fixed footer and forwards input.
@@ -26,9 +27,9 @@ export function applyCompactionView(terminal, child, frame, layout, state, runti
   if (!compacting) delete nextState.compactionFrame;
   const nextLayout = layoutScreen(layout.columns, layout.rows, nextState, options);
   let nextFrame = frame;
-  if (terminal.cols !== nextLayout.columns || terminal.rows !== nextLayout.chatRows) {
-    terminal.resize(nextLayout.columns, nextLayout.chatRows);
-    child?.resize(nextLayout.columns, nextLayout.chatRows);
+  if (terminal.cols !== nextLayout.chatColumns || terminal.rows !== nextLayout.chatRows) {
+    terminal.resize(nextLayout.chatColumns, nextLayout.chatRows);
+    child?.resize(nextLayout.chatColumns, nextLayout.chatRows);
     nextFrame = [];
   }
   return {
@@ -111,7 +112,7 @@ function inputTokens(chunk, state) {
     const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(source.slice(next));
     if (mouse) {
       flushText();
-      tokens.push({ type: 'mouse', raw: mouse[0], code: Number(mouse[1]), y: Number(mouse[3]) });
+      tokens.push({ type: 'mouse', raw: mouse[0], code: Number(mouse[1]), x: Number(mouse[2]), y: Number(mouse[3]), action: mouse[4] });
       index = next + mouse[0].length;
       continue;
     }
@@ -136,6 +137,7 @@ export async function integratedTerminal(store, options, args) {
   const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
   let selectedModel = null;
+  let alternateScrollOffset = 0, scrollbarDragging = false, scrollbarDragOffset = 0;
   let windowTitle = null;
   const updateTitle = () => {
     const label = projectWindowTitle(state, cwd, options);
@@ -148,7 +150,7 @@ export async function integratedTerminal(store, options, args) {
   const dimensions = () => ({ cols: Math.max(20, process.stdout.columns || 120), rows: Math.max(10, process.stdout.rows || 30) });
   const size = dimensions();
   layout = layoutScreen(size.cols, size.rows, state, options);
-  const terminal = new xterm.Terminal({ cols: size.cols, rows: layout.chatRows, scrollback: 10000, allowProposedApi: true, windowsPty: process.platform === 'win32' ? { backend: 'conpty', buildNumber: Number(os.release().split('.')[2]) } : undefined });
+  const terminal = new xterm.Terminal({ cols: layout.chatColumns, rows: layout.chatRows, scrollback: 10000, allowProposedApi: true, windowsPty: process.platform === 'win32' ? { backend: 'conpty', buildNumber: Number(os.release().split('.')[2]) } : undefined });
   const oldRaw = Boolean(process.stdin.isRaw);
   const modeReset = '\x1b[?1l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l';
   let modeKey = '';
@@ -166,20 +168,21 @@ export async function integratedTerminal(store, options, args) {
       if (modes.sendFocusMode) output += '\x1b[?1004h';
       // Captura la rueda en el HUB aunque Codex no solicite tracking; si no,
       // Windows Terminal puede convertirla en flechas.
-      const mouse = { x10: 1000, vt200: 1000, drag: 1002, any: 1003 }[modes.mouseTrackingMode] || 1000;
+      const mouse = modes.mouseTrackingMode === 'any' ? 1003 : 1002;
       output += `\x1b[?${mouse}h\x1b[?1006h`;
     }
-    const result = drawFrame(terminal, layout, frame);
+    const result = drawFrame(terminal, layout, frame, alternateScrollOffset, options);
     frame = result.lines;
     process.stdout.write(output + result.text);
   };
   const schedule = () => { if (!painting && !stopped) painting = setTimeout(paint, 25); };
   const setSelectedModel = model => {
-    if (!model) return;
+    if (!model || model === selectedModel) return;
     selectedModel = model;
     runtimeSignals = { ...runtimeSignals, model };
     state = { ...state, model };
     schedule();
+    void refresh();
   };
   const syncCompaction = () => {
     const compacting = isCompacting(terminal);
@@ -225,9 +228,9 @@ export async function integratedTerminal(store, options, args) {
       }
       const current = dimensions();
       const next = layoutScreen(current.cols, current.rows, state, options);
-      if (terminal.cols !== current.cols || terminal.rows !== next.chatRows) {
-        terminal.resize(current.cols, next.chatRows);
-        child?.resize(current.cols, next.chatRows);
+      if (terminal.cols !== next.chatColumns || terminal.rows !== next.chatRows) {
+        terminal.resize(next.chatColumns, next.chatRows);
+        child?.resize(next.chatColumns, next.chatRows);
         frame = [];
       }
       layout = next;
@@ -235,9 +238,20 @@ export async function integratedTerminal(store, options, args) {
       schedule();
     } finally { refreshing = false; }
   };
+  const setAlternateScrollOffset = target => {
+    const next = Math.max(0, Math.min(alternateScrollRange, Math.round(target)));
+    const pages = next - alternateScrollOffset;
+    if (pages) child.write((pages > 0 ? '\x1b[5~' : '\x1b[6~').repeat(Math.abs(pages)));
+    alternateScrollOffset = next;
+    schedule();
+  };
   const scrollChat = (direction, lines = layout.chatRows) => {
     if (terminal.buffer.active.type === 'alternate') {
+      const pages = Math.max(1, Math.ceil(lines / layout.chatRows));
+      alternateScrollOffset = Math.max(0, Math.min(alternateScrollRange,
+        alternateScrollOffset + (direction < 0 ? pages : -pages)));
       child.write(direction < 0 ? '\x1b[5~' : '\x1b[6~');
+      schedule();
       return;
     }
     terminal.scrollLines(direction * lines);
@@ -266,19 +280,59 @@ export async function integratedTerminal(store, options, args) {
       }
       // Los eventos del pie pertenecen al HUD. La rueda vertical desplaza la
       // conversación en vez de llegar al editor como historial de flechas.
-      if (token.y > layout.chatRows) continue;
+      if (scrollbarDragging && token.action === 'm') {
+        scrollbarDragging = false;
+        continue;
+      }
       const verticalWheel = (token.code & 64) !== 0 && (token.code & 2) === 0;
       if (verticalWheel) {
+        if (token.y > layout.chatRows) continue;
         const direction = (token.code & 1) === 0 ? -1 : 1;
         const buffer = terminal.buffer.active;
         const childTracksMouse = terminal.modes.mouseTrackingMode && terminal.modes.mouseTrackingMode !== 'none';
-        if (buffer.type === 'alternate' && childTracksMouse) child.write(token.raw);
-        else scrollChat(direction, 3);
+        if (buffer.type === 'alternate' && childTracksMouse) {
+          const wheelStep = 3 / layout.chatRows;
+          alternateScrollOffset = Math.max(0, Math.min(alternateScrollRange, alternateScrollOffset + (direction < 0 ? wheelStep : -wheelStep)));
+          child.write(token.raw);
+          schedule();
+        } else scrollChat(direction, 3);
         continue;
       }
+      if (scrollbarDragging && token.action === 'M') {
+        const thumb = scrollThumb(terminal.buffer.active, layout.chatRows, alternateScrollOffset);
+        if (thumb) {
+          const target = scrollTarget(token.y - 1, scrollbarDragOffset, thumb, layout.chatRows);
+          if (thumb.mode === 'exact') {
+            terminal.scrollLines(target - terminal.buffer.active.viewportY);
+            schedule();
+          } else setAlternateScrollOffset(target);
+        }
+        continue;
+      }
+      if (token.y <= layout.chatRows && token.x === layout.columns) {
+        if (token.action === 'M' && (token.code & 3) === 0 && (token.code & 32) === 0) {
+          const thumb = scrollThumb(terminal.buffer.active, layout.chatRows, alternateScrollOffset);
+          if (thumb) {
+            const pointerRow = token.y - 1;
+            scrollbarDragging = true;
+            scrollbarDragOffset = pointerRow >= thumb.top && pointerRow < thumb.top + thumb.size
+              ? pointerRow - thumb.top
+              : Math.floor(thumb.size / 2);
+            const target = scrollTarget(pointerRow, scrollbarDragOffset, thumb, layout.chatRows);
+            if (thumb.mode === 'exact') {
+              terminal.scrollLines(target - terminal.buffer.active.viewportY);
+              schedule();
+            } else setAlternateScrollOffset(target);
+          }
+        }
+        continue;
+      }
+      if (token.y > layout.chatRows) continue;
       const buffer = terminal.buffer.active;
       if (buffer.type === 'normal' && buffer.viewportY < buffer.baseY) continue;
-      if (!terminal.modes.mouseTrackingMode || terminal.modes.mouseTrackingMode === 'none') continue;
+      const mouseMode = terminal.modes.mouseTrackingMode;
+      if (!mouseMode || mouseMode === 'none') continue;
+      if ((token.code & 32) !== 0 && mouseMode !== 'drag' && mouseMode !== 'any') continue;
       child.write(token.raw);
     }
     // Escape sola es una tecla válida. Espera brevemente por si viene una
@@ -306,7 +360,7 @@ export async function integratedTerminal(store, options, args) {
   try {
     const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' };
     delete env.CODEX_THREAD_ID; delete env.CODEX_SESSION_ID;
-    child = pty.spawn(resolveCodex(options.executable), ['-c', 'tui.terminal_title=["session-id","model","reasoning","status","fast-mode"]', '-c', 'tui.status_line=[]', ...args], { name: 'xterm-256color', cols: size.cols, rows: layout.chatRows, cwd, env, useConpty: true });
+    child = pty.spawn(resolveCodex(options.executable), ['-c', 'tui.terminal_title=["session-id","model","reasoning","status","fast-mode"]', '-c', 'tui.status_line=[]', ...args], { name: 'xterm-256color', cols: layout.chatColumns, rows: layout.chatRows, cwd, env, useConpty: true });
     process.stdout.write('\x1b[?1049h\x1b[2J');
     active = true;
     updateTitle();
@@ -319,6 +373,7 @@ export async function integratedTerminal(store, options, args) {
         announced = id;
         selected = null;
         selectedModel = null;
+        alternateScrollOffset = 0;
         delete runtimeSignals.model;
         state = { ...toSnapshot({ id, cwd, status: 'connecting' }), connected: true };
         store.refreshed = 0;
