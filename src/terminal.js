@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CommandTracker } from './command-tracker.js';
 import { resolveCodex } from './launch.js';
-import { layoutScreen, drawFrame, titleSignals } from './terminal-view.js';
+import { layoutScreen, drawFrame, titleSignals, isCompacting } from './terminal-view.js';
 import { toSnapshot } from './signals.js';
 
 // A real Codex process owns the chat; its VT output is confined to the upper
@@ -16,6 +16,27 @@ export function projectWindowTitle(state, cwd, { title, home = os.homedir() } = 
   const directory = state.cwd || cwd;
   if (path.resolve(directory) === path.resolve(home)) return 'Nueva tarea';
   return clean(state.project || path.win32.basename(directory.replace(/[\\/]+$/, '')) || directory) || 'Codex';
+}
+
+export function applyCompactionView(terminal, child, frame, layout, state, runtimeSignals, compacting, frameNumber, options) {
+  const nextRuntimeSignals = { ...runtimeSignals, compacting };
+  if (compacting) nextRuntimeSignals.compactionFrame = frameNumber;
+  else delete nextRuntimeSignals.compactionFrame;
+  const nextState = { ...state, ...nextRuntimeSignals };
+  if (!compacting) delete nextState.compactionFrame;
+  const nextLayout = layoutScreen(layout.columns, layout.rows, nextState, options);
+  let nextFrame = frame;
+  if (terminal.cols !== nextLayout.columns || terminal.rows !== nextLayout.chatRows) {
+    terminal.resize(nextLayout.columns, nextLayout.chatRows);
+    child?.resize(nextLayout.columns, nextLayout.chatRows);
+    nextFrame = [];
+  }
+  return {
+    runtimeSignals: nextRuntimeSignals,
+    state: nextState,
+    layout: nextLayout,
+    frame: nextFrame
+  };
 }
 
 const pasteStart = '\x1b[200~';
@@ -111,7 +132,7 @@ export async function integratedTerminal(store, options, args) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('El chat integrado requiere una terminal interactiva. Usa run --plain para comandos sin terminal.');
   const cwd = options.project || process.cwd();
   let state = toSnapshot({ cwd }), selected = null, announced = null, layout, frame = [], stopped = false;
-  let painting = null, refreshing = false, timer, inputFlushTimer, child, active = false;
+  let painting = null, refreshing = false, timer, compactionTimer, inputFlushTimer, child, active = false;
   const inputState = { pending: '', pasting: false };
   let runtimeSignals = {};
   let windowTitle = null;
@@ -152,6 +173,31 @@ export async function integratedTerminal(store, options, args) {
     process.stdout.write(output + result.text);
   };
   const schedule = () => { if (!painting && !stopped) painting = setTimeout(paint, 25); };
+  const syncCompaction = () => {
+    const compacting = isCompacting(terminal);
+    if (compacting === Boolean(runtimeSignals.compacting)) return;
+    clearInterval(compactionTimer);
+    const updateView = (active, frameNumber) => {
+      const next = applyCompactionView(terminal, child, frame, layout, state, runtimeSignals, active, frameNumber, options);
+      runtimeSignals = next.runtimeSignals;
+      state = next.state;
+      layout = next.layout;
+      frame = next.frame;
+    };
+    if (compacting) {
+      updateView(true, 0);
+      if (options.color !== false) {
+        compactionTimer = setInterval(() => {
+          if (!isCompacting(terminal)) { syncCompaction(); return; }
+          updateView(true, (runtimeSignals.compactionFrame + 1) % 6);
+          schedule();
+        }, 180);
+      }
+    } else {
+      updateView(false, 0);
+    }
+    schedule();
+  };
   const refresh = async () => {
     if (refreshing || stopped) return;
     refreshing = true;
@@ -238,7 +284,7 @@ export async function integratedTerminal(store, options, args) {
   const cleanup = () => {
     if (stopped) return;
     stopped = true;
-    clearInterval(timer); clearTimeout(painting); clearTimeout(inputFlushTimer);
+    clearInterval(timer); clearInterval(compactionTimer); clearTimeout(painting); clearTimeout(inputFlushTimer);
     process.stdin.off('data', input); process.stdout.off('resize', resize);
     if (active) {
       process.stdin.setRawMode(oldRaw); process.stdin.pause();
@@ -269,7 +315,7 @@ export async function integratedTerminal(store, options, args) {
       if (parsed) { state = { ...state, ...runtimeSignals }; void refresh(); }
       updateTitle();
     });
-    child.onData(data => terminal.write(data, schedule));
+    child.onData(data => terminal.write(data, () => { syncCompaction(); schedule(); }));
     timer = setInterval(() => void refresh(), 1000);
     paint();
     return await new Promise(resolve => child.onExit(event => { cleanup(); resolve(event.exitCode); }));

@@ -1,11 +1,16 @@
 {
   "name": "gaona-hub",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "GAONA-HUB byGaona: a neon HUD fixed below your official Codex CLI chat.",
   "author": "byGaona",
-  "repository": { "type": "git", "url": "git+https://github.com/planetagaona-stack/GAONA-HUB.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/planetagaona-stack/GAONA-HUB.git"
+  },
   "homepage": "https://github.com/planetagaona-stack/GAONA-HUB#readme",
-  "bugs": { "url": "https://github.com/planetagaona-stack/GAONA-HUB/issues" },
+  "bugs": {
+    "url": "https://github.com/planetagaona-stack/GAONA-HUB/issues"
+  },
   "type": "module",
   "license": "MIT",
   "engines": {

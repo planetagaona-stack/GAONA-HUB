@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import xterm from '@xterm/headless';
 import { layoutScreen, bufferRows, drawFrame, footerSession, sessionFromTitle, titleSignals } from '../src/terminal-view.js';
+import * as terminalView from '../src/terminal-view.js';
 import { demoSnapshot, visibleLength } from '../src/render.js';
 import { renderHud } from '../src/render.js';
 import { CommandTracker } from '../src/command-tracker.js';
 import { parseSignals, toSnapshot } from '../src/signals.js';
-import { projectWindowTitle } from '../src/terminal.js';
+import { projectWindowTitle, applyCompactionView } from '../src/terminal.js';
 
 test('window titles identify the actual project at startup and after session binding', () => {
   assert.equal(projectWindowTitle({}, 'C:\\Projects\\Tienda'), 'Tienda');
@@ -78,6 +79,82 @@ test('footer reserves bottom rows while keeping at least eight rows for Codex', 
     assert.ok(layout.chatRows >= 8);
     assert.ok(layout.footer.every(line => visibleLength(line) <= columns));
   }
+});
+
+test('Codex compaction is detected only while its live two-line status is visible', async t => {
+  const terminal = emulator(t, 80, 16);
+  await write(terminal, '› user mentions Compacting context\r\ntext only\r\n');
+  assert.equal(typeof terminalView.isCompacting, 'function');
+  assert.equal(terminalView.isCompacting(terminal), false);
+  await write(terminal, '\x1b[2J\x1b[10;1H• Compacting context (0:02 • esc to interrupt)\r\n  └ Making room to continue.\r\n\r\n\r\n› Ask Codex to do anything');
+  assert.equal(terminalView.isCompacting(terminal), true);
+  await write(terminal, '\x1b[2J\x1b[H› Ask Codex to do anything\r\nContext compacted\r\n');
+  assert.equal(terminalView.isCompacting(terminal), false);
+});
+
+test('compaction detection finds the live status across the viewport and rejects composer text', async t => {
+  const terminal = emulator(t, 80, 24);
+  await write(terminal, '\x1b[2J\x1b[3;1H• Compacting context (0:02 • esc to interrupt)\r\n  └ Making room to continue.\r\n\r\n\r\n› Ask Codex to do anything');
+  assert.equal(terminalView.isCompacting(terminal), true);
+
+  await write(terminal, '\x1b[2J\x1b[18;1H› Analiza este registro:\r\n  • Compacting context (0:02 • esc to interrupt)\r\n  └ Making room to continue.');
+  assert.equal(terminalView.isCompacting(terminal), false);
+});
+
+test('compaction detection ignores historical status while the viewport is scrolled up', async t => {
+  const terminal = emulator(t, 80, 12);
+  await write(terminal, '• Compacting context (0:02 • esc to interrupt)\r\n  └ Making room to continue.\r\n\r\n\r\n› Ask Codex to do anything\r\n');
+  for (let row = 0; row < 20; row++) await write(terminal, `línea normal ${row}\r\n`);
+  assert.ok(terminal.buffer.active.baseY > 0);
+  assert.equal(terminalView.isCompacting(terminal), false);
+
+  terminal.scrollToTop();
+  assert.ok(terminal.buffer.active.viewportY < terminal.buffer.active.baseY);
+  assert.equal(terminalView.isCompacting(terminal), false);
+});
+
+test('compaction refreshes the footer on every frame and clears its state when Codex finishes', t => {
+  const terminal = emulator(t, 120, 30);
+  const child = { resize() {} };
+  const state = { ...demoSnapshot, compacting: false };
+  const initial = layoutScreen(120, 30, state, { color: true });
+  const started = applyCompactionView(terminal, child, [], initial, state, {}, true, 0, { color: true });
+  assert.match(started.layout.footer.join('\n'), /COMPACTANDO/);
+
+  const animated = applyCompactionView(terminal, child, started.frame, started.layout, started.state, started.runtimeSignals, true, 1, { color: true });
+  assert.notDeepEqual(animated.layout.footer, started.layout.footer);
+
+  const finished = applyCompactionView(terminal, child, animated.frame, animated.layout, animated.state, animated.runtimeSignals, false, 0, { color: true });
+  assert.equal(finished.state.compacting, false);
+  assert.equal(finished.state.compactionFrame, undefined);
+  assert.doesNotMatch(finished.layout.footer.join('\n'), /COMPACTANDO/);
+  assert.doesNotMatch(layoutScreen(120, 30, { ...demoSnapshot, ...finished.runtimeSignals }, { color: true }).footer.join('\n'), /COMPACTANDO/);
+});
+
+test('compaction resizes the PTY and resets the frame when the HUD grows', t => {
+  const terminal = emulator(t, 49, 30);
+  const sizes = [];
+  const child = { resize: (columns, rows) => sizes.push([columns, rows]) };
+  const state = { ...demoSnapshot, compacting: false };
+  const initial = layoutScreen(49, 30, state, { color: true });
+  const started = applyCompactionView(terminal, child, ['old frame'], initial, state, {}, true, 0, { color: true });
+  assert.equal(terminal.rows, started.layout.chatRows);
+  assert.deepEqual(sizes.at(-1), [49, started.layout.chatRows]);
+  assert.deepEqual(started.frame, []);
+  assert.equal(drawFrame(terminal, started.layout).lines.length, 30);
+
+  const finished = applyCompactionView(terminal, child, started.frame, started.layout, started.state, started.runtimeSignals, false, 0, { color: true });
+  assert.equal(terminal.rows, finished.layout.chatRows);
+  assert.deepEqual(sizes.at(-1), [49, finished.layout.chatRows]);
+  assert.deepEqual(finished.frame, []);
+  assert.doesNotMatch(finished.layout.footer.join('\n'), /COMPACTANDO/);
+  assert.equal(drawFrame(terminal, finished.layout).lines.length, 30);
+});
+
+test('HUD heading replaces the decorative slash rail with a thin rule', () => {
+  const layout = layoutScreen(120, 24, demoSnapshot, { color: false });
+  assert.ok(!layout.footer.join('\n').includes('////'));
+  assert.ok(layout.footer[0].includes('─'));
 });
 
 test('Codex clear-screen and alternate-buffer output cannot overwrite the reserved HUD', async t => {

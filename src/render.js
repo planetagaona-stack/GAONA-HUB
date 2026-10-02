@@ -44,6 +44,14 @@ export function renderHud(state, { width = 120, color = true, ascii = false, dem
   const tokens = n => formatTokens(n).replaceAll('—', missing);
   const time = n => duration(n).replaceAll('—', missing);
   const progress = value => value == null ? missing : (ascii ? '#' : '━').repeat(Math.round(Math.max(0, Math.min(100, value)) / 10)) + (ascii ? '-' : '─').repeat(10 - Math.round(Math.max(0, Math.min(100, value)) / 10));
+  const fillLine = ascii ? '-' : String.fromCharCode(0x2500);
+  const compactionStatus = () => {
+    if (!color) return 'COMPACTANDO';
+    const depth = [0, 1, 2, 2, 1, 0][Math.abs(Math.floor(state.compactionFrame ?? 0)) % 6];
+    const left = (ascii ? ['  ', '< ', '<<'] : ['  ', '‹ ', '‹‹'])[depth];
+    const right = (ascii ? ['  ', ' >', '>>'] : ['  ', ' ›', '››'])[depth];
+    return `${left}${ascii ? '@' : '◉'}${right} COMPACTANDO`;
+  };
   const bar = progress(free);
   const cells = [
     ['orange', `${ascii ? '#' : '▤'} CTX  ${percent(state.contextPercent)} usado`, `${progress(state.contextPercent)}  IN ${tokens(state.inputTokens)} · OUT ${tokens(state.outputTokens)}`],
@@ -55,7 +63,8 @@ export function renderHud(state, { width = 120, color = true, ascii = false, dem
     ['green', `${ascii ? 'o' : '●'} STATUS`, ({ working: 'Working', idle: 'Idle', paused: 'Paused', connecting: 'Esperando datos', unknown: 'Sin sesión' })[state.status] ?? 'Sin sesión'],
     ['cyan', `${ascii ? ':' : '◷'} TAREA`, time(state.taskSeconds)],
   ];
-  const horizontal = ascii ? '-' : '─';
+  if (state.compacting) cells[6][2] = compactionStatus();
+  const horizontal = fillLine;
   const border = (left, right) => paint('border', left + horizontal.repeat(width - 2) + right);
   const enclosed = text => paint('border', ascii ? '|' : '│') + text + ' '.repeat(Math.max(0, width - 2 - visibleLength(text))) + paint('border', ascii ? '|' : '│');
   const title = '>_ GAONA-HUB byGaona';
@@ -68,11 +77,11 @@ export function renderHud(state, { width = 120, color = true, ascii = false, dem
       const text = clip(cell[row + 1], size - 2, ascii);
       const padding = Math.max(0, size - 1 - visibleLength(text));
       const colorName = row === 0 || cell[0] === 'pink' || /CTX|TAREA/.test(cell[1]) ? cell[0] : 'white';
-      return ' ' + paint(colorName, text) + (row === 0 && padding > 1 ? ' ' + paint('border', '/'.repeat(padding - 1)) : ' '.repeat(padding));
+      return ' ' + paint(colorName, text) + (row === 0 && padding > 1 ? ' ' + paint('border', horizontal.repeat(padding - 1)) : ' '.repeat(padding));
     }).join(paint('border', ascii ? '|' : '│')));
     output.push(...content.map((text, row) => {
       const remaining = Math.max(0, width - 2 - visibleLength(text));
-      const filled = row === 0 && remaining > 1 ? text + ' ' + paint('border', '/'.repeat(remaining - 1)) : text;
+      const filled = row === 0 && remaining > 1 ? text + ' ' + paint('border', horizontal.repeat(remaining - 1)) : text;
       return footer ? filled.trimEnd() : enclosed(filled);
     }));
     group = []; used = 0;

@@ -131,6 +131,18 @@ test('renderer fits narrow/wide terminals, unicode and colored padding', () => {
     }
   }
 });
+test('HUD uses a clean rule and renders a moving compaction indicator only in color mode', () => {
+  const normal = renderHud({ ...demoSnapshot, status: 'working' }, { width: 180, color: false, footer: true });
+  assert.ok(!normal.includes('////'));
+  const first = renderHud({ ...demoSnapshot, compacting: true, compactionFrame: 0 }, { width: 120, color: true, footer: true });
+  const later = renderHud({ ...demoSnapshot, compacting: true, compactionFrame: 2 }, { width: 120, color: true, footer: true });
+  assert.match(first, /COMPACTANDO/);
+  assert.notEqual(first, later);
+  const still = renderHud({ ...demoSnapshot, compacting: true, compactionFrame: 0 }, { width: 120, color: false, footer: true });
+  const stillLater = renderHud({ ...demoSnapshot, compacting: true, compactionFrame: 2 }, { width: 120, color: false, footer: true });
+  assert.match(still, /COMPACTANDO/);
+  assert.equal(still, stillLater);
+});
 test('terminal control sequences from metadata cannot execute', () => {
   const text = renderHud({ ...demoSnapshot, project: '\x1b[2J\x1b]52;c;SECRET\x07\nproject', model: '\x1b[31mtest' }, { color: false });
   assert.ok(!text.includes('\x1b'));
