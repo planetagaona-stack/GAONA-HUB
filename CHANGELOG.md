@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+- La barra del historial queda visual y Windows Terminal conserva Ctrl+clic,
+  selección y rueda nativos; `Shift+PageUp` / `Shift+PageDown` desplazan el chat.
+- El indicador MODEL se actualiza al elegir modelos anteriores.
+- El encabezado del HUD elimina la regla de relleno y conserva los separadores.
+
 ## 0.6.0
 
 - La rueda del mouse recorre el chat en vez de cambiar el texto del editor.

@@ -30,7 +30,7 @@
     <path d="M57 40 69 28 81 40 69 52Z" fill="none" stroke="#60dcf5" stroke-width="1.4"/>
     <path d="M64 40h10M69 35v10" stroke="#60dcf5" stroke-width="1"/>
     <text x="94" y="45" fill="#d6e4e9" font-size="15" font-weight="700" letter-spacing="2">GAONA-HUB</text>
-    <text x="248" y="45" fill="#72909a" font-size="11" letter-spacing="1.5">V0.6.0 · CODEX INTEGRADO</text>
+    <text x="248" y="45" fill="#72909a" font-size="11" letter-spacing="1.5">V0.6.1 · CODEX INTEGRADO</text>
     <text x="1540" y="44" text-anchor="end" fill="#78909a" font-size="10" letter-spacing="1.2">VISTA DE MUESTRA · DATOS SIMULADOS</text>
   </g>
 
